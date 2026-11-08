@@ -154,6 +154,7 @@ function buildPanel() {
       '<button id="mf-all" style="flex:1;background:#4a7dff;border:0;color:#fff;border-radius:8px;padding:8px;cursor:pointer;font-weight:600">Download all</button>' +
       '<button id="mf-pauseall" style="background:#3a3a52;border:0;color:#cfd8ff;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">Pause all</button>' +
     '</div>';
+  zhDom(panel);
 
   document.body.appendChild(panel);
   panel.querySelector("#mf-close").onclick = () => (panel.style.display = "none");
@@ -190,7 +191,7 @@ function catOf(r) {
   const j = jobFor(r.name);
   if (j) return j.state;
   if (pending.has(baseName(r.name))) return "pending";
-  return r.state === "complete" ? "done" : "idle";
+  return r.state === "complete" ? zh("done") : "idle";
 }
 
 let lastCats = {};
@@ -242,15 +243,15 @@ function renderRows() {
     if (r.state === "complete" && !job) {
       right = '<span style="font-size:11px;color:#3ecf8e;flex-shrink:0">✓ present</span>';
     } else if (cat === "downloading" || cat === "queued") {
-      right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-pause", "Pause", "#3a3a52") + btn("mf-cancel", "Cancel", "#4a2530") + "</div>";
+      right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-pause", "Pause", "#3a3a52") + btn("mf-cancel", zh("Cancel"), "#4a2530") + "</div>";
     } else if (cat === "pending") {
-      right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-cancel", "Cancel", "#4a2530") + "</div>";
+      right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-cancel", zh("Cancel"), "#4a2530") + "</div>";
     } else if (cat === "paused") {
       color = "#f0c060";
-      right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-dl", "Resume", "#4a7dff") + btn("mf-cancel", "Cancel", "#4a2530") + "</div>";
+      right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-dl", zh("Resume"), "#4a7dff") + btn("mf-cancel", zh("Cancel"), "#4a2530") + "</div>";
     } else if (cat === "error") {
       color = "#ff6b6b";
-      right = btn("mf-dl", "Retry", "#4a7dff");
+      right = btn("mf-dl", zh("Retry"), "#4a7dff");
     } else if (cat === "cancelled") {
       right = btn("mf-dl", "Redownload", "#4a7dff");
     } else {
@@ -324,21 +325,21 @@ function updateNumbers() {
     } else if (cat === "pending") {
       barEl.style.width = "0%";
       numEl.style.color = "#8a8aa0";
-      numEl.textContent = "Preparing...";
+      numEl.textContent = zh("Preparing...");
     } else if (cat === "paused") {
       barEl.style.width = pct.toFixed(1) + "%";
       barEl.style.background = "#f0c060";
       numEl.style.color = "#f0c060";
-      numEl.textContent = "Paused · " + mb(job.done) + " / " + mb(job.total);
+      numEl.textContent = zh("Paused · ") + mb(job.done) + " / " + mb(job.total);
     } else if (cat === "error") {
       barEl.style.width = "100%";
       barEl.style.background = "#ff6b6b";
       numEl.style.color = "#ff6b6b";
-      numEl.textContent = "Failed: " + String(job.error || "").slice(0, 60);
+      numEl.textContent = zh("Failed: ") + String(job.error || "").slice(0, 60);
     } else if (cat === "cancelled") {
       numEl.style.color = "#8a8aa0";
-      numEl.textContent = "Cancelled";
-    } else if (cat === "done") {
+      numEl.textContent = zh("Cancelled");
+    } else if (cat === zh("done")) {
       barEl.style.width = "100%";
       barEl.style.background = "#3ecf8e";
       numEl.style.color = "#3ecf8e";
@@ -346,7 +347,7 @@ function updateNumbers() {
     } else {
       barEl.style.width = "0%";
       numEl.style.color = "#7a7a92";
-      numEl.textContent = r.state === "partial" ? "got " + mb(r.have) : "Not downloaded";
+      numEl.textContent = r.state === "partial" ? "got " + mb(r.have) : zh("Not downloaded");
     }
   }
 }
@@ -359,7 +360,7 @@ function bindCopy() {
     const txt = JSON.stringify(rows, null, 2);
     try {
       await navigator.clipboard.writeText(txt);
-      btn.textContent = "Copied. Opening the issue page...";
+      btn.textContent = zh("Copied. Opening the issue page...");
       const title = encodeURIComponent("[unresolved] " + rows.filter(r => !r.url).map(r => r.name).join(", ").slice(0, 120));
       const body = encodeURIComponent("Please paste the diagnostics from your clipboard here (Ctrl+V).\n\n---\n\n");
       window.open("https://github.com/AinJuZen/ComfyUI-ModelMirror/issues/new?title=" + title + "&body=" + body, "_blank");
@@ -367,7 +368,7 @@ function bindCopy() {
       btn.textContent = "Copy failed";
       console.log(txt);
     }
-    setTimeout(() => (btn.textContent = "Copy &amp; report"), 1500);
+    setTimeout(() => (btn.textContent = zh("Copy &amp; report")), 1500);
   };
 }
 
@@ -521,12 +522,12 @@ function updateBatchBar() {
   });
 
   if (!batchBusy) {
-    all.textContent = todo.length ? "Download all (" + todo.length + "）" : "Download all";
+    all.textContent = todo.length ? zh("Download all (") + todo.length + "）" : zh("Download all");
     all.disabled = todo.length === 0;
     all.style.opacity = todo.length ? "1" : ".45";
     all.style.cursor = todo.length ? "pointer" : "default";
   }
-  pa.textContent = busy.length ? "Pause all (" + busy.length + "）" : "Pause all";
+  pa.textContent = busy.length ? zh("Pause all (") + busy.length + "）" : zh("Pause all");
   pa.disabled = busy.length === 0;
   pa.style.opacity = busy.length ? "1" : ".45";
   pa.style.cursor = busy.length ? "pointer" : "default";
@@ -625,7 +626,7 @@ function fakeStyleFrom(el) {
 // The official button label in every locale we know - the injection point must match all of them.
 const ALL_DL_LABELS = [
   "全部下载", "下载全部", "下载所有",
-  "Download All", "Download all", "Download all missing",
+  "Download All", zh("Download all"), "Download all missing",
   "Alle herunterladen", "Tout télécharger", "Descargar todo",
   "すべてダウンロード", "全部下載",
 ];
@@ -655,7 +656,7 @@ function injectInline() {
 
   const b = document.createElement("button");
   b.id = "mirror-fetch-inline";
-  b.textContent = "Mirror Fetch";
+  b.textContent = zh("Mirror Fetch");
   b.title = "Download missing models through a mirror (resumable)";
   b.style.cssText = fakeStyleFrom(anchor);
   b.onmouseenter = () => (b.style.background = "#2c3c66");
@@ -670,7 +671,7 @@ function mountFloating() {
   if (document.getElementById("mirror-fetch-float")) return;
   const b = document.createElement("button");
   b.id = "mirror-fetch-float";
-  b.textContent = "Mirror Fetch";
+  b.textContent = zh("Mirror Fetch");
   b.style.cssText =
     "position:fixed;right:16px;bottom:16px;z-index:99997;padding:8px 14px;" +
     "background:#243055;border:1px solid #3a4a7a;border-radius:8px;color:#cfd8ff;" +
@@ -695,70 +696,64 @@ try {
 
 // ---------------------------------------------------------------- 中文本地化
 // The source language is English (required for the registry listing).
-// When the browser language is Chinese we overlay a translation on the
-// rendered DOM, so the code stays English-only and the user still sees Chinese.
+// When the browser language is Chinese, T() swaps the display string at build time.
+// 不用「渲染后再改 DOM」的做法：那会半途替换（中英混排），并让观察器自触发、面板闪烁。
 const ZH_MODE = /^zh/i.test(navigator.language || "");
 
-const ZH_MAP = {
+const ZH = {
   "Mirror Fetch": "镜像补缺",
   "Rescan": "重新扫描",
-  "Download": "下载",
+  "Download all (": "全部下载（",
   "Download all": "全部下载",
-  "Pause": "暂停",
+  "Pause all (": "全部暂停（",
   "Pause all": "全部暂停",
+  "Download": "下载",
+  "Pause": "暂停",
   "Resume": "继续",
   "Retry": "重试",
   "Cancel": "取消",
   "Redownload": "重新下载",
   "No URL": "无地址",
   "Copy & report": "复制并报告",
+  "Copy &amp; report": "复制并报告",
   "Not downloaded": "未下载",
-  "Present": "已存在",
-  "Done": "已完成",
-  "Failed": "失败",
-  "Cancelled": "已取消",
-  "Paused": "已暂停",
   "Preparing...": "准备中…",
-  "Submitting...": "提交中…",
-  "Pausing...": "暂停中…",
-  "Scanning...": "正在扫描…",
+  "Paused · ": "已暂停 · ",
+  "Paused": "已暂停",
+  "Cancelled": "已取消",
+  "Failed: ": "失败：",
   "Copied. Opening the issue page...": "已复制，正在打开反馈页…",
+  "done": "已完成",
+  "Referenced ": "引用 ",
+  " · with URL ": " 个 · 带地址 ",
+  " · missing ": " 个 · 缺 ",
+  "Missing Models": "缺失模型",
   "No model references found in the current workflow": "当前工作流没检测到模型引用",
+  "These files were not found on the mirror. They may be private repos, or renamed after the fact.":
+    "没在镜像上找到这几个文件，可能是私有仓库或者后来改过名。",
+  "Click “Copy &amp; report” in the top right: it copies the diagnostics and opens the issue page.":
+    "点右上「复制并报告」，会自动复制诊断信息并打开反馈页面。",
   "Click “Rescan” in the top right to see what is missing": "点右上「重新扫描」查看缺什么",
   "✓ Everything is already present": "✓ 全部已存在，不缺东西",
-  "Missing Models": "缺失模型",
-  "Not started": "未开始",
 };
 
-const ZH_PREFIX = [
-  ["Download all (", "全部下载（"],
-  ["Pause all (", "全部暂停（"],
-  ["Referenced ", "引用 "],
-  [" · with URL ", " 个 · 带地址 "],
-  [" · missing ", " 个 · 缺 "],
-  ["Paused · ", "已暂停 · "],
-  [" · resumed", " · 续传"],
-  ["got ", "已下 "],
-  ["left ", "剩 "],
-  [" s", " 秒"],
-  ["Failed: ", "失败："],
-  ["Check failed: ", "检查失败："],
-  ["Request failed: ", "请求失败："],
-  ["Submit failed: ", "提交失败："],
-  ["Pause all failed", "全部暂停失败"],
-];
+// 长键先换，免得 "Download all" 先把 "Download all (" 吃掉
+const ZH_KEYS = Object.keys(ZH).sort((a, b) => b.length - a.length);
 
-function zhText(s) {
-  const t = s.trim();
-  if (!t) return s;
-  if (ZH_MAP[t]) return s.replace(t, ZH_MAP[t]);
-  for (const [en, zh] of ZH_PREFIX) {
-    if (t.startsWith(en)) return s.replace(en, zh);
+const zh = T;   // 兼容早先写的 zh(...) 调用
+
+function T(s) {
+  if (!ZH_MODE || !s) return s;
+  let out = s;
+  for (const k of ZH_KEYS) {
+    if (out.indexOf(k) >= 0) out = out.split(k).join(ZH[k]);
   }
-  return s;
+  return out;
 }
 
-function applyZh(root) {
+// 只跑一次：骨架是整段 innerHTML，字符串里塞不下逐个标点。
+// 不是观察器，改完就结束，所以不会自触发。
+function zhDom(root) {
   if (!ZH_MODE || !root) return;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
   const nodes = [];
@@ -767,31 +762,12 @@ function applyZh(root) {
   for (const node of nodes) {
     const v = node.nodeValue;
     if (!v || !v.trim()) continue;
-    const next = zhText(v);
-    if (next !== v) node.nodeValue = next;
+    const nv = T(v);
+    if (nv !== v) node.nodeValue = nv;
   }
   root.querySelectorAll("[title]").forEach((el) => {
-    const t = el.getAttribute("title");
-    const nt = zhText(t);
-    if (nt !== t) el.setAttribute("title", nt);
+    const a = el.getAttribute("title");
+    const b = T(a);
+    if (b !== a) el.setAttribute("title", b);
   });
-}
-// 面板每次重建/刷新后过一遍翻译。用 MutationObserver 而不是改 60 处调用点。
-let zhTimer = null;
-function watchZh() {
-  if (!ZH_MODE) return;
-  const obs = new MutationObserver(() => {
-    clearTimeout(zhTimer);
-    zhTimer = setTimeout(() => {
-      const box = document.getElementById("mirror-fetch-panel");
-      applyZh(box || document.body);
-    }, 40);
-  });
-  obs.observe(document.body, { childList: true, subtree: true, characterData: true });
-}
-
-try {
-  watchZh();
-} catch (e) {
-  /* 观察器起不来也不影响功能 */
 }
