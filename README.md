@@ -1,5 +1,7 @@
 # ComfyUI-ModelMirror · 镜像下载自动补缺
 
+**English: [README.en.md](README.en.md)**
+
 > 由 @痒局长 制作 · [B 站](https://space.bilibili.com/322892) · [Comfy Registry](https://registry.comfy.org/publishers/ainjuzen/nodes/comfyui-modelmirror)
 
 > 缺模型时，一键从镜像补齐。**不改官方任何文件，升级不碎。**
