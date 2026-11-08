@@ -216,12 +216,12 @@ function renderRows() {
   }
 
   if (!rows.length) {
-    body.innerHTML = html + '<div style="color:#8a8aa0;padding:20px 0;text-align:center">Click “Rescan” in the top right to see what is missing</div>';
+    body.innerHTML = zh(html) + '<div style="color:#8a8aa0;padding:20px 0;text-align:center">Click “Rescan” in the top right to see what is missing</div>';
     bindCopy();
     return;
   }
   if (!missing.length) {
-    body.innerHTML = html + '<div style="color:#3ecf8e;padding:20px 0;text-align:center">✓ Everything is already present</div>';
+    body.innerHTML = zh(html) + '<div style="color:#3ecf8e;padding:20px 0;text-align:center">✓ Everything is already present</div>';
     bindCopy();
     return;
   }
@@ -276,7 +276,7 @@ function renderRows() {
       "</div>";
   }
 
-  body.innerHTML = html;
+  body.innerHTML = zh(html);
   bindCopy();
 
   body.querySelectorAll("button.mf-dl").forEach((b) => {
@@ -522,12 +522,12 @@ function updateBatchBar() {
   });
 
   if (!batchBusy) {
-    all.textContent = todo.length ? zh("Download all (") + todo.length + "）" : zh("Download all");
+    all.textContent = todo.length ? labelCount("Download all", todo.length) : zh("Download all");
     all.disabled = todo.length === 0;
     all.style.opacity = todo.length ? "1" : ".45";
     all.style.cursor = todo.length ? "pointer" : "default";
   }
-  pa.textContent = busy.length ? zh("Pause all (") + busy.length + "）" : zh("Pause all");
+  pa.textContent = busy.length ? labelCount("Pause all", busy.length) : zh("Pause all");
   pa.disabled = busy.length === 0;
   pa.style.opacity = busy.length ? "1" : ".45";
   pa.style.cursor = busy.length ? "pointer" : "default";
@@ -727,6 +727,9 @@ const ZH = {
   "Referenced ": "引用 ",
   " · with URL ": " 个 · 带地址 ",
   " · missing ": " 个 · 缺 ",
+  "got ": "已下 ",
+  "left ": "剩 ",
+  " · resumed": " · 续传",
   "Missing Models": "缺失模型",
   "No model references found in the current workflow": "当前工作流没检测到模型引用",
   "These files were not found on the mirror. They may be private repos, or renamed after the fact.":
@@ -754,6 +757,11 @@ function T(s) {
 
 // 只跑一次：骨架是整段 innerHTML，字符串里塞不下逐个标点。
 // 不是观察器，改完就结束，所以不会自触发。
+// 计数标签：中文用全角括号，英文用半角加空格。一次拼好，不留给翻译层。
+function labelCount(en, n) {
+  return ZH_MODE ? zh(en) + "（" + n + "）" : en + " (" + n + ")";
+}
+
 function zhDom(root) {
   if (!ZH_MODE || !root) return;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
