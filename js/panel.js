@@ -224,7 +224,7 @@ function renderRows() {
     bindCopy();
     return;
   }
-  if (!withUrl) {
+  if (!withUrl && !statusMsg) {
     html += '<div style="color:#f0c060;padding:8px 0 12px;font-size:12px;line-height:1.6">没在镜像上找到这几个文件，可能是私有仓库或者后来改过名。<br>点右上「复制并报告」，会自动复制诊断信息并打开反馈页面。</div>';
   }
 
@@ -413,7 +413,7 @@ async function scan() {
 
   const need = rows.filter((r) => r.state !== "complete" && !r.url).map((r) => r.name);
   if (need.length) {
-    statusMsg = "正在镜像上查找下载地址…（首次约 10 秒，之后有缓存）";
+    statusMsg = "正在镜像上查找下载地址…首次较慢（约 10-40 秒），之后有缓存";
     renderRows();
     try {
       const rv = await fetch(API + "/resolve", {
