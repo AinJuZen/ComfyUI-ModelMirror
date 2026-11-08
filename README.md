@@ -1,4 +1,4 @@
-# comfyui-mirror-downloader · 镜像补缺
+# ComfyUI-ModelMirror · 镜像补缺
 
 > 缺模型时，一键从镜像补齐。**不改官方任何文件，升级不碎。**
 
@@ -14,13 +14,22 @@
 
 ## One-liner (EN)
 
-ComfyUI shows "missing models" when you open a shared workflow, and its download button
-goes straight to `huggingface.co` — which is unreachable in mainland China. This extension
-adds a **Mirror Fetch** button next to it: it detects the missing model files, resolves
-each to its official HF repo through a configurable mirror, and downloads them into the
-correct `models/<type>/` folder with resume support.
+**ComfyUI shows "missing models" when you open a shared workflow, and its download button
+goes straight to `huggingface.co` — which is unreachable for many users.**
 
-**It patches nothing.** Upgrade ComfyUI freely.
+This extension adds a **Mirror Fetch** button next to it: it detects the missing model files,
+resolves each to its official HF repo through a configurable mirror, and downloads them into
+the correct `models/<type>/` folder — with pause / resume / retry / concurrency limit, and
+**without patching ComfyUI itself** (safe across upgrades).
+
+```bash
+cd ComfyUI/custom_nodes
+git clone https://github.com/AinJuZen/ComfyUI-ModelMirror.git
+# restart ComfyUI — no pip install needed
+```
+
+Everything below is in Chinese, which is the primary audience. If you need English docs,
+open an issue and I'll write them.
 
 ---
 
@@ -32,7 +41,7 @@ correct `models/<type>/` folder with resume support.
 
 ```bash
 cd <ComfyUI>/custom_nodes
-git clone https://github.com/AinJuZen/comfyui-mirror-downloader.git
+git clone https://github.com/AinJuZen/ComfyUI-ModelMirror.git
 ```
 
 重启 ComfyUI。不需要 `pip install`，不需要装任何东西。
