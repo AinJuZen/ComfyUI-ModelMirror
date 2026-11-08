@@ -1,4 +1,4 @@
-# comfyui-mirror-fetch · 镜像补缺
+# comfyui-mirror-downloader · 镜像补缺
 
 > 缺模型时，一键从镜像补齐。**不改官方任何文件，升级不碎。**
 
@@ -32,14 +32,14 @@ correct `models/<type>/` folder with resume support.
 
 ```bash
 cd <ComfyUI>/custom_nodes
-git clone https://github.com/<you>/comfyui-mirror-fetch.git
+git clone https://github.com/AinJuZen/comfyui-mirror-downloader.git
 ```
 
 重启 ComfyUI。不需要 `pip install`，不需要装任何东西。
 
 ### 方式 B · ComfyUI-Manager
 
-Manager → Custom Nodes Manager → 搜 `mirror-fetch` → Install → 重启。
+Manager → Custom Nodes Manager → 搜 `mirror-downloader` → Install → 重启。
 
 ### 方式 C · ComfyUI Desktop
 
