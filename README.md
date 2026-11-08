@@ -51,9 +51,11 @@ comfy node install comfyui-modelmirror
 pip install comfy-cli
 ```
 
-### 方式 B · ComfyUI-Manager
+### 方式 B · ComfyUI-Manager（暂未收录）
 
-**Manager → Custom Nodes Manager → 搜索 `ModelMirror` → Install → 重启 ComfyUI**
+**尚未收录到 Manager 的节点清单**（正在提交 PR）。
+
+收录后可以直接搜 `ComfyUI-ModelMirror` 安装。在那之前，请用方式 A（一行命令）或方式 C（ZIP）。
 
 ### 方式 C · 下载 ZIP（不用命令行，也不用 Manager）
 
