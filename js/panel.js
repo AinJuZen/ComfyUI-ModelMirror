@@ -1,6 +1,6 @@
-// ComfyUI 镜像补缺 · 前端面板
-// 缺模型时，一键从可配置的镜像端点补齐，带断点续传和实时进度。
-// 不改官方任何文件。
+// ComfyUI Mirror Fetch - frontend panel
+// Fills in missing models from a configurable mirror, with resume and live progress.
+// It does not patch any official file.
 
 const API = "/mirror_fetch";
 
@@ -13,9 +13,9 @@ const mb = (n) => {
 };
 const baseName = (p) => String(p || "").split(/[\\/]/).pop();
 
-// ---------------------------------------------------------------- 收集模型引用
+// ---------------------------------------------------------------- collect model refs
 
-// 控件名 → ComfyUI 目录（权威映射：控件可选值本身就来自这个目录）
+// widget name -> ComfyUI folder (authoritative: the widget options come from that folder)
 const WIDGET_DIR = {
   ckpt_name: "checkpoints",
   unet_name: "diffusion_models",
@@ -41,7 +41,7 @@ function guessDir(name) {
   return "diffusion_models";
 }
 
-// 深度扫描：不管 URL 藏在哪一层，对象长成 {name, url, directory} 就抓出来
+// Deep scan: wherever the URL is buried, keep any object shaped like {name, url, directory}.
 function deepFindModels(root, out, seen, visited, depth) {
   if (!root || depth > 7) return;
   if (typeof root !== "object") return;
@@ -104,7 +104,7 @@ function collectModelRefs() {
         const key = "|" + v;
         if (!seen.has(key)) {
           seen.add(key);
-          // 控件名决定目录：这个控件能选什么，是从那个目录里读的
+          // The widget name decides the folder: its options are listed from that folder.
           const wd = WIDGET_DIR[w?.name];
           out.push({
             name: v,
@@ -119,16 +119,16 @@ function collectModelRefs() {
   return out;
 }
 
-// ---------------------------------------------------------------- 状态
+// ---------------------------------------------------------------- state
 
 let panel = null;
-let rows = [];        // 当前缺失/存在的行
+let rows = [];        // current missing/present rows
 let jobsBy = {};      // basename -> job
-const pending = new Set();  // 刚点下载、后端还没回报的名字
+const pending = new Set();  // names the user just submitted; backend has not reported yet
 let scanning = false;
 let statusMsg = "";
 
-// ---------------------------------------------------------------- 面板骨架
+// ---------------------------------------------------------------- panel skeleton
 
 function buildPanel() {
   if (panel) return panel;
@@ -144,22 +144,22 @@ function buildPanel() {
 
   panel.innerHTML =
     '<div style="padding:11px 14px;border-bottom:1px solid #2e2e42;display:flex;align-items:center;gap:8px">' +
-      '<b style="flex:1">镜像补缺</b>' +
+      '<b style="flex:1">Mirror Fetch</b>' +
       '<span id="mf-mirror" style="font-size:11px;color:#8a8aa0"></span>' +
-      '<button id="mf-scan" style="background:#2e2e42;border:0;color:#e6e6ef;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px">重新扫描</button>' +
+      '<button id="mf-scan" style="background:#2e2e42;border:0;color:#e6e6ef;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px">Rescan</button>' +
       '<span id="mf-close" style="cursor:pointer;color:#8a8aa0;padding:0 4px">✕</span>' +
     '</div>' +
     '<div id="mf-body" style="padding:10px 14px;overflow:auto;flex:1"></div>' +
     '<div style="padding:10px 14px;border-top:1px solid #2e2e42;display:flex;gap:8px">' +
-      '<button id="mf-all" style="flex:1;background:#4a7dff;border:0;color:#fff;border-radius:8px;padding:8px;cursor:pointer;font-weight:600">全部下载</button>' +
-      '<button id="mf-pauseall" style="background:#3a3a52;border:0;color:#cfd8ff;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">全部暂停</button>' +
+      '<button id="mf-all" style="flex:1;background:#4a7dff;border:0;color:#fff;border-radius:8px;padding:8px;cursor:pointer;font-weight:600">Download all</button>' +
+      '<button id="mf-pauseall" style="background:#3a3a52;border:0;color:#cfd8ff;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">Pause all</button>' +
     '</div>';
 
   document.body.appendChild(panel);
   panel.querySelector("#mf-close").onclick = () => (panel.style.display = "none");
   panel.querySelector("#mf-scan").onclick = () => scan();
-  panel.querySelector("#mf-all").onclick = () => withBatchFeedback(panel.querySelector("#mf-all"), "提交中…", downloadAll);
-  panel.querySelector("#mf-pauseall").onclick = () => withBatchFeedback(panel.querySelector("#mf-pauseall"), "暂停中…", pauseAll);
+  panel.querySelector("#mf-all").onclick = () => withBatchFeedback(panel.querySelector("#mf-all"), "Submitting...", downloadAll);
+  panel.querySelector("#mf-pauseall").onclick = () => withBatchFeedback(panel.querySelector("#mf-pauseall"), "Pausing...", pauseAll);
 
   fetch(API + "/info").then((r) => r.json()).then((d) => {
     panel.querySelector("#mf-mirror").textContent = d.mirror || "";
@@ -175,7 +175,7 @@ function openPanel() {
   if (show) scan();
 }
 
-// ---------------------------------------------------------------- 渲染
+// ---------------------------------------------------------------- render
 
 function jobFor(name) {
   return jobsBy[baseName(name)] || null;
@@ -195,7 +195,7 @@ function catOf(r) {
 
 let lastCats = {};
 
-// 全量重绘（只在状态类别变化时调用）
+// Full rebuild - only when the state category changes.
 function renderRows() {
   if (!panel) return;
   const body = panel.querySelector("#mf-body");
@@ -206,8 +206,8 @@ function renderRows() {
 
   let html =
     '<div style="display:flex;align-items:center;gap:8px;padding:2px 0 9px;border-bottom:1px solid #22222f;margin-bottom:8px;font-size:11px;color:#8a8aa0">' +
-      '<span style="flex:1">引用 ' + rows.length + " 个 · 带地址 " + withUrl + " 个 · 缺 " + missing.length + " 个</span>" +
-      '<button id="mf-copy" style="background:#2e2e42;border:0;color:#cfd8ff;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:11px">复制并报告</button>' +
+      '<span style="flex:1">Referenced ' + rows.length + " · with URL " + withUrl + " · missing " + missing.length + "</span>" +
+      '<button id="mf-copy" style="background:#2e2e42;border:0;color:#cfd8ff;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:11px">Copy &amp; report</button>' +
     "</div>";
 
   if (statusMsg) {
@@ -215,17 +215,17 @@ function renderRows() {
   }
 
   if (!rows.length) {
-    body.innerHTML = html + '<div style="color:#8a8aa0;padding:20px 0;text-align:center">点右上「重新扫描」查看缺什么</div>';
+    body.innerHTML = html + '<div style="color:#8a8aa0;padding:20px 0;text-align:center">Click “Rescan” in the top right to see what is missing</div>';
     bindCopy();
     return;
   }
   if (!missing.length) {
-    body.innerHTML = html + '<div style="color:#3ecf8e;padding:20px 0;text-align:center">✓ 全部已存在，不缺东西</div>';
+    body.innerHTML = html + '<div style="color:#3ecf8e;padding:20px 0;text-align:center">✓ Everything is already present</div>';
     bindCopy();
     return;
   }
   if (!withUrl && !statusMsg) {
-    html += '<div style="color:#f0c060;padding:8px 0 12px;font-size:12px;line-height:1.6">没在镜像上找到这几个文件，可能是私有仓库或者后来改过名。<br>点右上「复制并报告」，会自动复制诊断信息并打开反馈页面。</div>';
+    html += '<div style="color:#f0c060;padding:8px 0 12px;font-size:12px;line-height:1.6">These files were not found on the mirror. They may be private repos, or renamed after the fact.<br>Click “Copy &amp; report” in the top right: it copies the diagnostics and opens the issue page.</div>';
   }
 
   for (const r of missing) {
@@ -240,23 +240,23 @@ function renderRows() {
     let pct = 0;
 
     if (r.state === "complete" && !job) {
-      right = '<span style="font-size:11px;color:#3ecf8e;flex-shrink:0">✓ 已存在</span>';
+      right = '<span style="font-size:11px;color:#3ecf8e;flex-shrink:0">✓ present</span>';
     } else if (cat === "downloading" || cat === "queued") {
-      right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-pause", "暂停", "#3a3a52") + btn("mf-cancel", "取消", "#4a2530") + "</div>";
+      right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-pause", "Pause", "#3a3a52") + btn("mf-cancel", "Cancel", "#4a2530") + "</div>";
     } else if (cat === "pending") {
-      right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-cancel", "取消", "#4a2530") + "</div>";
+      right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-cancel", "Cancel", "#4a2530") + "</div>";
     } else if (cat === "paused") {
       color = "#f0c060";
-      right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-dl", "继续", "#4a7dff") + btn("mf-cancel", "取消", "#4a2530") + "</div>";
+      right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-dl", "Resume", "#4a7dff") + btn("mf-cancel", "Cancel", "#4a2530") + "</div>";
     } else if (cat === "error") {
       color = "#ff6b6b";
-      right = btn("mf-dl", "重试", "#4a7dff");
+      right = btn("mf-dl", "Retry", "#4a7dff");
     } else if (cat === "cancelled") {
-      right = btn("mf-dl", "重新下载", "#4a7dff");
+      right = btn("mf-dl", "Redownload", "#4a7dff");
     } else {
       right = r.url
-        ? btn("mf-dl", "下载", "#4a7dff")
-        : '<button disabled style="background:#2e2e42;border:0;color:#666680;border-radius:6px;padding:5px 12px">无地址</button>';
+        ? btn("mf-dl", "Download", "#4a7dff")
+        : '<button disabled style="background:#2e2e42;border:0;color:#666680;border-radius:6px;padding:5px 12px">No URL</button>';
     }
 
     html +=
@@ -297,7 +297,7 @@ function renderRows() {
   updateNumbers();
 }
 
-// 只改数字和进度条，不重建 DOM —— 这样按钮不会被秒刷掉，点击就不会丢
+// Update numbers and bars in place. Rebuilding the DOM every second swallows clicks.
 function updateNumbers() {
   if (!panel) return;
   const body = panel.querySelector("#mf-body");
@@ -317,36 +317,36 @@ function updateNumbers() {
       barEl.style.width = pct.toFixed(1) + "%";
       barEl.style.background = "#4a7dff";
       const sp = job.speed ? (job.speed / 1048576).toFixed(1) + " MB/s" : "…";
-      const eta = job.eta ? "剩 " + Math.round(job.eta) + " 秒" : "";
+      const eta = job.eta ? "left " + Math.round(job.eta) + " s" : "";
       numEl.style.color = "#4a7dff";
       numEl.textContent = pct.toFixed(0) + "% · " + mb(job.done) + " / " + mb(job.total) +
-        " · " + sp + " · " + eta + (job.resumed ? " · 续传" : "");
+        " · " + sp + " · " + eta + (job.resumed ? " · resumed" : "");
     } else if (cat === "pending") {
       barEl.style.width = "0%";
       numEl.style.color = "#8a8aa0";
-      numEl.textContent = "准备中…";
+      numEl.textContent = "Preparing...";
     } else if (cat === "paused") {
       barEl.style.width = pct.toFixed(1) + "%";
       barEl.style.background = "#f0c060";
       numEl.style.color = "#f0c060";
-      numEl.textContent = "已暂停 · " + mb(job.done) + " / " + mb(job.total);
+      numEl.textContent = "Paused · " + mb(job.done) + " / " + mb(job.total);
     } else if (cat === "error") {
       barEl.style.width = "100%";
       barEl.style.background = "#ff6b6b";
       numEl.style.color = "#ff6b6b";
-      numEl.textContent = "失败：" + String(job.error || "").slice(0, 60);
+      numEl.textContent = "Failed: " + String(job.error || "").slice(0, 60);
     } else if (cat === "cancelled") {
       numEl.style.color = "#8a8aa0";
-      numEl.textContent = "已取消";
+      numEl.textContent = "Cancelled";
     } else if (cat === "done") {
       barEl.style.width = "100%";
       barEl.style.background = "#3ecf8e";
       numEl.style.color = "#3ecf8e";
-      numEl.textContent = "✓ 已完成";
+      numEl.textContent = "✓ done";
     } else {
       barEl.style.width = "0%";
       numEl.style.color = "#7a7a92";
-      numEl.textContent = r.state === "partial" ? "已下 " + mb(r.have) : "未下载";
+      numEl.textContent = r.state === "partial" ? "got " + mb(r.have) : "Not downloaded";
     }
   }
 }
@@ -359,15 +359,15 @@ function bindCopy() {
     const txt = JSON.stringify(rows, null, 2);
     try {
       await navigator.clipboard.writeText(txt);
-      btn.textContent = "已复制，正在打开反馈页…";
-      const title = encodeURIComponent("[无法解析] " + rows.filter(r => !r.url).map(r => r.name).join(", ").slice(0, 120));
-      const body = encodeURIComponent("请把剪贴板里的诊断信息粘贴到这里（Ctrl+V）。\n\n---\n\n");
+      btn.textContent = "Copied. Opening the issue page...";
+      const title = encodeURIComponent("[unresolved] " + rows.filter(r => !r.url).map(r => r.name).join(", ").slice(0, 120));
+      const body = encodeURIComponent("Please paste the diagnostics from your clipboard here (Ctrl+V).\n\n---\n\n");
       window.open("https://github.com/AinJuZen/ComfyUI-ModelMirror/issues/new?title=" + title + "&body=" + body, "_blank");
     } catch (e) {
-      btn.textContent = "复制失败";
+      btn.textContent = "Copy failed";
       console.log(txt);
     }
-    setTimeout(() => (btn.textContent = "复制并报告"), 1500);
+    setTimeout(() => (btn.textContent = "Copy &amp; report"), 1500);
   };
 }
 
@@ -375,18 +375,18 @@ const escapeHtml = (s) => String(s).replace(/[<>&"]/g, (c) =>
   ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]));
 const escapeAttr = (s) => escapeHtml(s).replace(/'/g, "&#39;");
 
-// ---------------------------------------------------------------- 扫描
+// ---------------------------------------------------------------- scan
 
 async function scan() {
   if (scanning) return;
   scanning = true;
-  statusMsg = "正在扫描…";
+  statusMsg = "Scanning...";
   renderRows();
 
   const refs = collectModelRefs();
   if (!refs.length) {
     rows = [];
-    statusMsg = "当前工作流没检测到模型引用";
+    statusMsg = "No model references found in the current workflow";
     scanning = false;
     renderRows();
     return;
@@ -400,7 +400,7 @@ async function scan() {
       body: JSON.stringify({ items: refs }),
     }).then((r) => r.json());
   } catch (e) {
-    statusMsg = "检查失败：" + e.message;
+    statusMsg = "Check failed: " + e.message;
     scanning = false;
     renderRows();
     return;
@@ -413,7 +413,7 @@ async function scan() {
 
   const need = rows.filter((r) => r.state !== "complete" && !r.url).map((r) => r.name);
   if (need.length) {
-    statusMsg = "正在镜像上查找下载地址…首次较慢（约 10-40 秒），之后有缓存";
+    statusMsg = "Looking up download URLs on the mirror... the first run is slow (10-40s), then it is cached";
     renderRows();
     try {
       const rv = await fetch(API + "/resolve", {
@@ -431,7 +431,7 @@ async function scan() {
           if (f.directory && !r.dirKnown) r.directory = f.directory;
         }
       }
-      // 目录被纠正过 → 重新校验存在性，否则会把已有的文件报成缺失
+      // The folder was corrected - re-check existence, otherwise present files are reported missing.
       const res2 = await fetch(API + "/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -442,7 +442,7 @@ async function scan() {
         if (r) { r.state = it.state; r.have = it.have; r.path = it.path; }
       }
     } catch (e) {
-      log("resolve 失败", e);
+      log("resolve failed", e);
     }
   }
 
@@ -460,10 +460,10 @@ async function startDownload(r) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: r.url, name: r.name, directory: r.directory }),
     }).then((x) => x.json());
-    if (d.error) alert("提交失败：" + d.error);
+    if (d.error) alert("Submit failed: " + d.error);
     else statusMsg = "";
   } catch (e) {
-    alert("提交失败：" + e.message);
+    alert("Submit failed: " + e.message);
   }
   pollJobs();
 }
@@ -477,22 +477,22 @@ async function postJob(path, name, btn) {
     });
     if (!r.ok) {
       statusMsg =
-        "接口 " + path + " 返回 HTTP " + r.status +
-        " —— 后端没加载新代码，请重启 ComfyUI 实例（不是刷新页面）";
+        "endpoint " + path + " returned HTTP " + r.status +
+        " — the backend is still running the old code. Restart the ComfyUI instance (reloading the page is not enough).";
       renderRows();
       return;
     }
     statusMsg = "";
     if (btn) { btn.disabled = true; btn.textContent = "…"; }
   } catch (e) {
-    statusMsg = "请求失败：" + e.message;
+    statusMsg = "Request failed: " + e.message;
     renderRows();
   }
   setTimeout(pollJobs, 400);
 }
 
-// 按状态批量操作，跟 Chrome 下载器一致：
-// 没开始的 → 开始；已暂停/失败/已取消 → 继续；正在下的 → 跳过
+// Batch actions are filtered by state, same as the Chrome download manager:
+// not started -> start; paused/failed/cancelled -> resume; in progress -> skip.
 async function downloadAll() {
   const list = rows.filter((r) => r.state !== "complete" && r.url);
   for (const r of list) {
@@ -503,7 +503,7 @@ async function downloadAll() {
   }
 }
 
-// 批量按钮的状态反馈：数量、忙闲、没得做时禁用
+// Batch button feedback: counts, busy state, disabled when there is nothing to do.
 function updateBatchBar() {
   if (!panel) return;
   const all = panel.querySelector("#mf-all");
@@ -521,12 +521,12 @@ function updateBatchBar() {
   });
 
   if (!batchBusy) {
-    all.textContent = todo.length ? "全部下载（" + todo.length + "）" : "全部下载";
+    all.textContent = todo.length ? "Download all (" + todo.length + "）" : "Download all";
     all.disabled = todo.length === 0;
     all.style.opacity = todo.length ? "1" : ".45";
     all.style.cursor = todo.length ? "pointer" : "default";
   }
-  pa.textContent = busy.length ? "全部暂停（" + busy.length + "）" : "全部暂停";
+  pa.textContent = busy.length ? "Pause all (" + busy.length + "）" : "Pause all";
   pa.disabled = busy.length === 0;
   pa.style.opacity = busy.length ? "1" : ".45";
   pa.style.cursor = busy.length ? "pointer" : "default";
@@ -564,12 +564,12 @@ async function pauseAll() {
       body: JSON.stringify({ all: true }),
     });
   } catch (e) {
-    log("全部暂停失败", e);
+    log("Pause all failed", e);
   }
   setTimeout(pollJobs, 400);
 }
 
-// ---------------------------------------------------------------- 轮询
+// ---------------------------------------------------------------- polling
 
 async function pollJobs() {
   if (!panel || panel.style.display !== "flex") return;
@@ -579,7 +579,7 @@ async function pollJobs() {
     for (const k of Object.keys(j)) {
       const nm = baseName(j[k].name);
       const cur = next[nm];
-      // 有正在跑的优先显示正在跑的
+      // Prefer showing a running job when several exist.
       if (!cur || j[k].state === "downloading" || (cur.state !== "downloading" && j[k].job > cur.job)) {
         next[nm] = j[k];
       }
@@ -591,8 +591,8 @@ async function pollJobs() {
   } catch (e) {
     return;
   }
-  // 只有"状态类别"变化时才重建 DOM；否则只更新数字——
-  // 否则每秒重建按钮，点击会被吞掉（这是"点好几次才有反应"的根因）
+  // Rebuild the DOM only when the state category changes; otherwise update numbers only.
+  // Rebuilding the buttons every second swallows clicks - that was a real bug here.
   let changed = false;
   for (const r of rows) {
     const c = catOf(r);
@@ -605,7 +605,7 @@ async function pollJobs() {
 
 setInterval(pollJobs, 1000);
 
-// ---------------------------------------------------------------- 入口（只放右侧原生面板里）
+// ---------------------------------------------------------------- entry point (native panel only)
 
 const BTN_STYLE =
   "display:flex;align-items:center;justify-content:center;gap:6px;" +
@@ -622,7 +622,7 @@ function fakeStyleFrom(el) {
   }
 }
 
-// 官方那个按钮各语言下的文案 —— 注入点必须跨语言都能命中
+// The official button label in every locale we know - the injection point must match all of them.
 const ALL_DL_LABELS = [
   "全部下载", "下载全部", "下载所有",
   "Download All", "Download all", "Download all missing",
@@ -636,10 +636,10 @@ function injectInline() {
 
   let anchor = btns.find((b) => ALL_DL_LABELS.includes(b.textContent.trim()));
 
-  // 兜底 1：找"缺失模型 / Missing Models"这块容器里的按钮
+  // Fallback 1: find buttons inside the "Missing Models" container.
   if (!anchor) {
     const marker = Array.from(document.querySelectorAll("div,span,p,h1,h2,h3"))
-      .find((el) => el.children.length === 0 && /缺失模型|Missing Models?|Missing models/i.test(el.textContent || ""));
+      .find((el) => el.children.length === 0 && /Missing Models?|缺失模型/i.test(el.textContent || ""));
     if (marker) {
       const scope = marker.closest("div") || marker.parentElement;
       const inner = scope ? Array.from(scope.querySelectorAll("button")) : [];
@@ -647,7 +647,7 @@ function injectInline() {
     }
   }
 
-  // 兜底 2：都没找到 → 挂一个浮动按钮，保证功能可达
+  // Fallback 2: nothing matched -> mount a floating button so the feature stays reachable.
   if (!anchor) {
     mountFloating();
     return true;
@@ -655,14 +655,14 @@ function injectInline() {
 
   const b = document.createElement("button");
   b.id = "mirror-fetch-inline";
-  b.textContent = "镜像补缺";
-  b.title = "缺的模型从国内镜像下载（断点续传）";
+  b.textContent = "Mirror Fetch";
+  b.title = "Download missing models through a mirror (resumable)";
   b.style.cssText = fakeStyleFrom(anchor);
   b.onmouseenter = () => (b.style.background = "#2c3c66");
   b.onmouseleave = () => (b.style.background = "#243055");
   b.onclick = openPanel;
   anchor.parentElement.insertBefore(b, anchor.nextSibling);
-  log("已插入到缺失模型面板");
+  log("Injected into the missing-models panel");
   return true;
 }
 
@@ -670,7 +670,7 @@ function mountFloating() {
   if (document.getElementById("mirror-fetch-float")) return;
   const b = document.createElement("button");
   b.id = "mirror-fetch-float";
-  b.textContent = "镜像补缺";
+  b.textContent = "Mirror Fetch";
   b.style.cssText =
     "position:fixed;right:16px;bottom:16px;z-index:99997;padding:8px 14px;" +
     "background:#243055;border:1px solid #3a4a7a;border-radius:8px;color:#cfd8ff;" +
@@ -690,5 +690,5 @@ try {
   const mo = new MutationObserver(() => injectInline());
   mo.observe(document.body, { childList: true, subtree: true });
 } catch (e) {
-  log("MutationObserver 不可用", e);
+  log("MutationObserver is not available", e);
 }

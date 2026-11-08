@@ -29,7 +29,7 @@ except Exception as e:  # 不在 ComfyUI 里时应静默失败，不拖垮启动
     print(f"[mirror-fetch] 无法加载 ComfyUI 依赖: {e}")
     PromptServer = None
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 MIRROR = os.environ.get("HF_MIRROR", "https://hf-mirror.com")
 UA = {"User-Agent": "comfyui-mirror-fetch/" + VERSION}
 
@@ -67,24 +67,78 @@ _DIR_ALIAS = {
 }
 
 
-def target_dir(directory):
-    """始终落到 models/<标准目录名>。
+# 只允许写进这些标准模型目录。名字来自 ComfyUI 自己的约定。
+# 不在这张表里的 directory 一律拒绝——这是防目录穿越的第一道闸。
+MODEL_DIRS = (
+    "checkpoints", "diffusion_models", "text_encoders", "vae", "loras",
+    "controlnet", "clip_vision", "upscale_models", "embeddings",
+    "audio_encoders", "vae_approx", "gligen", "photomaker", "style_models",
+    "hypernetworks", "t2i_adapter", "configs", "model_patches", "diffusers",
+)
 
-    不用 folder_paths 的映射——它把 diffusion_models 映射成 unet、
-    text_encoders 映射成 clip，跟用户库里实际的目录不一致，
-    会导致同一个文件在两个目录各下一份。
+
+class BadDir(ValueError):
+    """directory 不合法。路由层要把它翻成 400，而不是 500。"""
+
+
+def safe_dir_name(directory):
+    """把请求里的 directory 收敛成一个合法的模型目录名。
+
+    拒绝：空、绝对路径、盘符、``..``、任何分隔符、控制字符。
+    不在白名单里的名字也拒绝——宁可报错，也不替用户新建目录。
     """
-    d = (directory or "diffusion_models").strip().strip("/\\")
-    d = _DIR_ALIAS.get(d, d)
-    p = os.path.join(models_root(), d)
-    os.makedirs(p, exist_ok=True)
+    d = (directory or "").strip()
+    if not d:
+        return "diffusion_models"
+
+    # 反斜杠统一成正斜杠后再判断，避免 Windows 分隔符绕过
+    norm = d.replace("\\", "/")
+
+    if norm.startswith("/") or norm.startswith("~"):
+        raise BadDir("absolute path not allowed")
+    if len(norm) >= 2 and norm[1] == ":":
+        raise BadDir("drive letter not allowed")
+    if "/" in norm:
+        raise BadDir("path separators not allowed")
+
+    d = _DIR_ALIAS.get(norm, norm)
+    if d not in MODEL_DIRS:
+        raise BadDir("unknown model folder: " + d)
+    return d
+
+
+def target_dir(directory, create=False):
+    """返回 models/<标准目录名> 的绝对路径。
+
+    两道闸：
+      ① safe_dir_name 只放行白名单目录名，挡住 ``..``、盘符、分隔符；
+      ② 拼完之后再用 realpath + commonpath 确认没跑出 models 根目录。
+    只有 create=True 时才建目录——读路径不该产生副作用。
+    """
+    d = safe_dir_name(directory)
+    root = os.path.realpath(models_root())
+    p = os.path.realpath(os.path.join(root, d))
+
+    if p != root and not p.startswith(root + os.sep):
+        raise BadDir("resolved path escapes models root")
+
+    if create:
+        os.makedirs(p, exist_ok=True)
     return p
+
+
+def safe_file_name(name):
+    """文件名只取 basename，并拒绝空名和点号名。"""
+    base = os.path.basename((name or "").replace("\\", "/")).strip()
+    if not base or base in (".", ".."):
+        raise BadDir("bad file name")
+    return base
 
 
 def find_existing(name, directory):
     """返回 (状态, 本地字节, 路径)。状态：complete / partial / missing"""
     name = (name or "").replace("\\", "/")
-    base = os.path.basename(name)
+    base = safe_file_name(name)
     d = target_dir(directory)
     dest = os.path.join(d, base)
     tmp = dest + ".part"
@@ -133,10 +187,10 @@ def run_download(job_id, url, name, directory):
 
 
 def _do_download(job, job_id, url, name, directory):
-    d = target_dir(directory)
-    dest = os.path.join(d, os.path.basename(name.replace("\\", "/")))
+    d = target_dir(directory, create=True)
+    dest = os.path.join(d, safe_file_name(name))
     tmp = dest + ".part"
-    os.makedirs(d, exist_ok=True)
+    # 目录已在 target_dir(create=True) 里建好，这里不再 makedirs
 
     start_from = os.path.getsize(tmp) if os.path.exists(tmp) else 0
     headers = dict(UA)
@@ -356,10 +410,16 @@ if True:
             body = {}
         items = body.get("items") or []
         out = []
+        root = os.path.realpath(models_root())
         for it in items:
-            st, have, path = find_existing(it.get("name"), it.get("directory"))
-            out.append({"name": it.get("name"), "directory": it.get("directory"),
-                        "state": st, "have": have, "path": path})
+            try:
+                st, have, path = find_existing(it.get("name"), it.get("directory"))
+            except BadDir as e:
+                return web.json_response({"error": str(e)}, status=400)
+            # 只回相对路径：客户端不需要知道这台机器的绝对路径
+            rel = os.path.relpath(path, root).replace("\\", "/")
+            out.append({"name": it.get("name"), "directory": safe_dir_name(it.get("directory")),
+                        "state": st, "have": have, "path": rel})
         return web.json_response({"items": out})
 
     @routes.post("/mirror_fetch/resolve")
@@ -438,7 +498,12 @@ if True:
         if not url:
             return web.json_response({"error": f"不支持或不需要改写: {str(raw)[:80]}"}, status=400)
 
-        st, have, path = find_existing(name, directory)
+        try:
+            directory = safe_dir_name(directory)
+            safe_file_name(name)
+            st, have, path = find_existing(name, directory)
+        except BadDir as e:
+            return web.json_response({"error": str(e)}, status=400)
         jid = f"{int(time.time()*1000)}_{len(JOBS)}"
 
         # 同一个文件已经在下 → 直接返回原任务，不重复下
