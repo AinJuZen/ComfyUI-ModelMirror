@@ -626,7 +626,7 @@ function fakeStyleFrom(el) {
 // The official button label in every locale we know - the injection point must match all of them.
 const ALL_DL_LABELS = [
   "全部下载", "下载全部", "下载所有",
-  "Download All", zh("Download all"), "Download all missing",
+  "Download All", "Download all", "Download all missing",
   "Alle herunterladen", "Tout télécharger", "Descargar todo",
   "すべてダウンロード", "全部下載",
 ];
@@ -740,7 +740,8 @@ const ZH = {
 // 长键先换，免得 "Download all" 先把 "Download all (" 吃掉
 const ZH_KEYS = Object.keys(ZH).sort((a, b) => b.length - a.length);
 
-const zh = T;   // 兼容早先写的 zh(...) 调用
+// 用函数声明而不是 const：函数声明会提升，模块求值期间调用也不会踩 TDZ。
+function zh(s) { return T(s); }
 
 function T(s) {
   if (!ZH_MODE || !s) return s;
@@ -770,4 +771,12 @@ function zhDom(root) {
     const b = T(a);
     if (b !== a) el.setAttribute("title", b);
   });
+}
+// 加载标记：控制台里 window.__mirrorFetchBooted 为 true 说明模块起来了。
+// 按钮不见了先看这个，能一眼分清「模块没加载」和「注入点没找到」。
+try {
+  window.__mirrorFetchBooted = true;
+  console.log("[mirror-fetch] panel.js loaded, lang=" + (ZH_MODE ? "zh" : "en"));
+} catch (e) {
+  /* 忽略 */
 }

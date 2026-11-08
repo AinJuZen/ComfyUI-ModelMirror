@@ -1,6 +1,6 @@
 [project]
 name = "comfyui-modelmirror"
-version = "0.2.3"
+version = "0.2.4"
 description = "ComfyUI 缺模型时一键从镜像补齐：自动识别缺失、按文件名反查官方仓库、断点续传。不改官方文件，升级不碎。"
 license = { text = "MIT" }
 readme = "README.md"
