@@ -223,65 +223,94 @@ def _fix_dir(path, directory):
 _CACHE = {}
 
 
+def _search_ids(kw):
+    import urllib.parse as _up
+    try:
+        d = mirror_get_json(f"{MIRROR}/api/models?search={_up.quote(kw)}&limit=40&full=false")
+    except Exception:
+        return []
+    if not isinstance(d, list):
+        return []
+    return [c.get("id") or c.get("modelId") for c in d if (c.get("id") or c.get("modelId"))]
+
+
+def _repo_hit(repo, stem):
+    try:
+        d = mirror_get_json(f"{MIRROR}/api/models/{repo}?blobs=true")
+    except Exception:
+        return None
+    for s in d.get("siblings", []):
+        p = s.get("rfilename", "")
+        if os.path.basename(p) == stem:
+            return {
+                "repo": repo,
+                "path": p,
+                "url": f"{MIRROR}/{repo}/resolve/main/{p}",
+                "size": int(s.get("size") or 0),
+            }
+    return None
+
+
 def resolve_by_filename(name, prefer_orgs=("Comfy-Org",)):
     """按文件名去镜像上找仓库。
 
-    不依赖 ComfyUI 内部结构——只要文件在 HuggingFace 上，就有机会找到。
+    不依赖 ComfyUI 内部结构 —— 只要文件在 HuggingFace 上，就有机会找到。
+    为速度做了两处并行：关键词搜索并行、仓库探测并行。
     返回 {repo, path, url, size} 或 None。
     """
-    import urllib.parse
+    from concurrent.futures import ThreadPoolExecutor
 
     stem = os.path.basename((name or "").replace("\\", "/"))
     if not stem:
         return None
     base = stem.rsplit(".", 1)[0]
 
-    # 搜索词候选：完整名 → 第一个下划线段（如 krea2_xxx → krea2）→ 前两段
+    # 搜索词：完整名 + 所有相邻词对 + 较长的单词。
+    # 只取前缀不够：qwen3vl_32b_minimax_h3_nvfp4_awq 真正能搜到仓库的词是
+    # 中间的 minimax_h3，不是开头的 qwen3vl。
+    parts = [p for p in base.replace("-", "_").split("_") if p]
     kws = [base]
-    parts = base.split("_")
-    if len(parts) > 1:
-        kws.append(parts[0])
-        kws.append("_".join(parts[:2]))
+    for i in range(len(parts) - 1):
+        kws.append(parts[i] + "_" + parts[i + 1])
+    kws += [p for p in parts if len(p) >= 4]
+    seen_kw, dedup = set(), []
+    for k in kws:
+        k = k.strip().lower()
+        if len(k) >= 3 and k not in seen_kw:
+            seen_kw.add(k)
+            dedup.append(k)
+    kws = dedup[:8]
 
-    seen_ids = []
-    for kw in kws:
-        try:
-            cands = mirror_get_json(
-                f"{MIRROR}/api/models?search={urllib.parse.quote(kw)}&limit=40&full=false")
-        except Exception:
-            continue
-        if not isinstance(cands, list):
-            continue
-        for c in cands:
-            i = c.get("id") or c.get("modelId")
-            if i and i not in seen_ids:
-                seen_ids.append(i)
-        # 一旦已经有官方仓库候选，就不必再扩搜索
-        if any(x.startswith(tuple(o + "/" for o in prefer_orgs)) for x in seen_ids):
-            break
+    # ① 关键词并行搜索
+    ids = []
+    with ThreadPoolExecutor(max_workers=min(8, len(kws))) as ex:
+        for res in ex.map(_search_ids, kws):
+            for i in res:
+                if i not in ids:
+                    ids.append(i)
 
-    if not seen_ids:
+    if not ids:
         return None
 
-    seen_ids.sort(key=lambda i: (0 if any(i.startswith(o + "/") for o in prefer_orgs) else 1, len(i)))
+    # ② 排序：官方仓库优先；其次仓库名与文件名共有的"词"越多越靠前
+    toks = {p.lower() for p in parts if len(p) >= 3}
 
-    # 只探前 8 个：绝大多数情况官方仓库就在最前面，探太多只是白等
-    for repo in seen_ids[:8]:
-        try:
-            d = mirror_get_json(f"{MIRROR}/api/models/{repo}?blobs=true")
-        except Exception:
-            continue
-        for s in d.get("siblings", []):
-            p = s.get("rfilename", "")
-            if os.path.basename(p) == stem:
-                return {
-                    "repo": repo,
-                    "path": p,
-                    "url": f"{MIRROR}/{repo}/resolve/main/{p}",
-                    "size": int(s.get("size") or 0),
-                }
+    def score(repo):
+        low = repo.lower()
+        overlap = sum(1 for t in toks if t in low)
+        return (0 if any(repo.startswith(o + "/") for o in prefer_orgs) else 1,
+                -overlap, len(repo))
+
+    ids.sort(key=score)
+
+    # ③ 仓库探测并行（每批 5 个，命中即停）
+    for start in range(0, min(len(ids), 20), 5):
+        batch = ids[start:start + 5]
+        with ThreadPoolExecutor(max_workers=len(batch)) as ex:
+            for hit in ex.map(lambda r: _repo_hit(r, stem), batch):
+                if hit:
+                    return hit
     return None
-
 
 class _NoRoutes:
     """PromptServer 没就绪时的空壳：装饰器照常可用，只是不注册任何路由。
