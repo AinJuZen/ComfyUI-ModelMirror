@@ -313,3 +313,43 @@ comfy node install comfyui-modelmirror
 **代码和界面以英文为基准。**
 
 **浏览器语言是中文时，面板会自动切回中文**（英文是源码语言，中文是渲染后的覆盖层）。
+
+---
+
+## 维护者备忘
+
+**发版要两边一起发，否则用户会以为 GitHub 那份是旧的。**
+
+```
+① 改代码
+② 升版本：pyproject.toml 的 version + __init__.py 的 VERSION，两处必须同一个数
+③ 发 Registry：comfy node publish
+④ 发 GitHub：git tag vX.Y.Z && gh release create vX.Y.Z
+```
+
+**版本号对不上是最容易被问到的问题**——Registry 上写着 0.2.9，Releases 里最新还是 0.1.1，用户只会点开 Release 看。
+
+### 改完怎么验
+
+```
+.py  改了 → 必须重启 ComfyUI 实例（刷新页面不管用）
+.js  改了 → Ctrl+Shift+R 强刷
+
+接口  → curl http://127.0.0.1:8188/mirror_fetch/info 看 version 对不对
+渲染  → 仓库里没有，自测页面在本地 comfyui-mirror-fetch-test\render_test.html
+       用无头 Chrome 截图，能同时看中英文两种界面
+```
+
+**光跑语法检查不够。** 有几类错只有真渲染才看得见：
+翻译污染 HTML 属性、布局挤爆、状态没刷新。
+
+### 翻译怎么加
+
+**代码里写英文原文，中文放 `ZH` 词表。**
+
+```js
+zh("Download")           // 英文环境原样，中文环境查表
+```
+
+**词表里不要放 `" s"` 这种极短的键**——它会把 `style=` 里的 `s` 也替换掉，
+整块样式崩掉，而且语法检查查不出来。
