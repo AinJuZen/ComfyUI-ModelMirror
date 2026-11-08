@@ -39,43 +39,41 @@ open an issue and I'll write them.
 
 **要求**：ComfyUI ≥ 0.3.x（含 Desktop 版）。纯标准库，无额外依赖。
 
-### 方式 A · 下载 ZIP（推荐，不用装 git）
+### 方式 A · 一行命令（推荐）
 
-**① 打开仓库首页，点绿色的 `Code` 按钮 → `Download ZIP`**
+```bash
+comfy node install comfyui-modelmirror
+```
+
+**没有 `comfy` 命令？先装一次：**
+
+```bash
+pip install comfy-cli
+```
+
+### 方式 B · ComfyUI-Manager
+
+**Manager → Custom Nodes Manager → 搜索 `ModelMirror` → Install → 重启 ComfyUI**
+
+### 方式 C · 下载 ZIP（不用命令行，也不用 Manager）
+
+**① 仓库首页 → 绿色 `Code` 按钮 → `Download ZIP`**
 
 ```
 https://github.com/AinJuZen/ComfyUI-ModelMirror
 ```
 
-**② 解压，会得到 `ComfyUI-ModelMirror-main` 这个文件夹**
+**② 解压，得到 `ComfyUI-ModelMirror-main`，改名成 `ComfyUI-ModelMirror`（去掉 `-main`）**
 
-**③ 把它改名成 `ComfyUI-ModelMirror`（去掉 `-main`）**
-
-**④ 整个文件夹放进 ComfyUI 的 `custom_nodes` 目录**
+**③ 整个文件夹放进 ComfyUI 的 `custom_nodes` 目录**
 
 ```
 便携版     <ComfyUI_windows_portable>/ComfyUI/custom_nodes/
 桌面版     <ComfyUI-Installs>/<实例>/ComfyUI/custom_nodes/
-手动安装   <你的ComfyUI目录>/custom_nodes/
 ```
 
-**⑤ 重启 ComfyUI**
+**④ 重启 ComfyUI**
 
-**不需要 `pip install`，不需要装任何东西。**
-
-### 方式 B · git clone（会用 git 的推荐）
-
-```bash
-cd <ComfyUI>/custom_nodes
-git clone https://github.com/AinJuZen/ComfyUI-ModelMirror.git
-```
-
-**重启 ComfyUI。**
-
-### 方式 C · ComfyUI-Manager
-
-**暂未收录**——正在提交到官方节点清单，收录后这里能直接搜到。
-在那之前请用方式 A 或 B。
 ---
 
 ## 使用
