@@ -207,7 +207,7 @@ function renderRows() {
   let html =
     '<div style="display:flex;align-items:center;gap:8px;padding:2px 0 9px;border-bottom:1px solid #22222f;margin-bottom:8px;font-size:11px;color:#8a8aa0">' +
       '<span style="flex:1">引用 ' + rows.length + " 个 · 带地址 " + withUrl + " 个 · 缺 " + missing.length + " 个</span>" +
-      '<button id="mf-copy" style="background:#2e2e42;border:0;color:#cfd8ff;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:11px">复制诊断</button>' +
+      '<button id="mf-copy" style="background:#2e2e42;border:0;color:#cfd8ff;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:11px">复制并报告</button>' +
     "</div>";
 
   if (statusMsg) {
@@ -225,7 +225,7 @@ function renderRows() {
     return;
   }
   if (!withUrl) {
-    html += '<div style="color:#f0c060;padding:8px 0 12px;font-size:12px;line-height:1.6">找不到下载地址。点「复制诊断」把结果发我。</div>';
+    html += '<div style="color:#f0c060;padding:8px 0 12px;font-size:12px;line-height:1.6">没在镜像上找到这几个文件，可能是私有仓库或者后来改过名。<br>点右上「复制并报告」，会自动复制诊断信息并打开反馈页面。</div>';
   }
 
   for (const r of missing) {
@@ -359,12 +359,15 @@ function bindCopy() {
     const txt = JSON.stringify(rows, null, 2);
     try {
       await navigator.clipboard.writeText(txt);
-      btn.textContent = "已复制";
+      btn.textContent = "已复制，正在打开反馈页…";
+      const title = encodeURIComponent("[无法解析] " + rows.filter(r => !r.url).map(r => r.name).join(", ").slice(0, 120));
+      const body = encodeURIComponent("请把剪贴板里的诊断信息粘贴到这里（Ctrl+V）。\n\n---\n\n");
+      window.open("https://github.com/AinJuZen/ComfyUI-ModelMirror/issues/new?title=" + title + "&body=" + body, "_blank");
     } catch (e) {
       btn.textContent = "复制失败";
       console.log(txt);
     }
-    setTimeout(() => (btn.textContent = "复制诊断"), 1500);
+    setTimeout(() => (btn.textContent = "复制并报告"), 1500);
   };
 }
 
