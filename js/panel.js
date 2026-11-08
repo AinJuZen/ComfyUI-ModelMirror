@@ -318,10 +318,10 @@ function updateNumbers() {
       barEl.style.width = pct.toFixed(1) + "%";
       barEl.style.background = "#4a7dff";
       const sp = job.speed ? (job.speed / 1048576).toFixed(1) + " MB/s" : "…";
-      const eta = job.eta ? "left " + Math.round(job.eta) + " s" : "";
+        const eta = job.eta ? zh("left ") + Math.round(job.eta) + zh(" s") : "";
       numEl.style.color = "#4a7dff";
       numEl.textContent = pct.toFixed(0) + "% · " + mb(job.done) + " / " + mb(job.total) +
-        " · " + sp + " · " + eta + (job.resumed ? " · resumed" : "");
+          " · " + sp + " · " + eta + (job.resumed ? zh(" · resumed") : "");
     } else if (cat === "pending") {
       barEl.style.width = "0%";
       numEl.style.color = "#8a8aa0";
@@ -347,7 +347,7 @@ function updateNumbers() {
     } else {
       barEl.style.width = "0%";
       numEl.style.color = "#7a7a92";
-      numEl.textContent = r.state === "partial" ? "got " + mb(r.have) : zh("Not downloaded");
+      numEl.textContent = r.state === "partial" ? zh("got ") + mb(r.have) : zh("Not downloaded");
     }
   }
 }
@@ -729,6 +729,7 @@ const ZH = {
   " · missing ": " 个 · 缺 ",
   "got ": "已下 ",
   "left ": "剩 ",
+  " s": " 秒",
   " · resumed": " · 续传",
   "Missing Models": "缺失模型",
   "No model references found in the current workflow": "当前工作流没检测到模型引用",
