@@ -53,11 +53,18 @@ pip install comfy-cli
 
 ### 方式 B · ComfyUI-Manager
 
-**Manager → Custom Nodes Manager → 搜索 `ModelMirror` → Install → 重启 ComfyUI**
+**取决于你用的 Manager 版本：**
 
-> Manager 的节点列表有缓存（约 1 天）。最新上架的可能搜不到，
-> 可以在 Manager 里点一次 `Refresh`，或直接用方式 A。
-> 本项目已发布到 [Comfy Registry](https://registry.comfy.org/publishers/ainjuzen/nodes/comfyui-modelmirror)（状态 Active）。
+```
+Manager 4.x（pip 版，读 api.comfy.org）
+    → 已发布到 Registry，状态 Active，缓存刷新后可搜到
+
+Manager 3.x（custom_nodes 版，读 GitHub 的 custom-node-list.json）
+    → 目前搜不到，正在提交收录 PR
+    → 在那之前请用方式 A（一行命令）或方式 C（ZIP）
+```
+
+**不确定自己是哪个版本？直接看方式 A——一行命令，不需要 Manager。**
 
 ### 方式 C · 下载 ZIP（不用命令行，也不用 Manager）
 
