@@ -1,4 +1,4 @@
-﻿// ComfyUI Mirror Fetch - frontend panel
+// ComfyUI Mirror Fetch - frontend panel
 // Fills in missing models from a configurable mirror, with resume and live progress.
 // It does not patch any official file.
 
@@ -190,8 +190,11 @@ function bar(pct, color) {
 function catOf(r) {
   const j = jobFor(r.name);
   if (j) return j.state;
+  if (r.justDone) return "done";
   if (pending.has(baseName(r.name))) return "pending";
-  return r.state === "complete" ? zh("done") : "idle";
+  if (r.state === "complete") return zh("done");
+  if (r.state === "partial") return "idle-partial";   // 有半截文件，可续传
+  return "idle";
 }
 
 let lastCats = {};
@@ -203,11 +206,15 @@ function renderRows() {
   if (!body) return;
 
   const withUrl = rows.filter((r) => r.url).length;
-  const missing = rows.filter((r) => r.state !== "complete");
+  // 刚下完的行不立刻消失：留着显示「✓ 已完成 100%」，下次重新扫描才收起来。
+  // 之前是直接过滤掉，用户看不到完成，只有重扫才发现它没了。
+  const missing = rows.filter((r) => r.state !== "complete" || r.justDone);
+  // 「缺」只数真正还要动作的；刚下完的行留着显示，但不算缺。
+  const stillMissing = rows.filter((r) => r.state !== "complete" && !r.justDone).length;
 
   let html =
     '<div style="display:flex;align-items:center;gap:8px;padding:2px 0 9px;border-bottom:1px solid #22222f;margin-bottom:8px;font-size:11px;color:#8a8aa0">' +
-      '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Referenced ' + rows.length + " · with URL " + withUrl + " · missing " + missing.length + "</span>" +
+      '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Referenced ' + rows.length + " · with URL " + withUrl + " · missing " + stillMissing + "</span>" +
       '<button id="mf-copy" style="background:#2e2e42;border:0;color:#cfd8ff;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:11px">Copy &amp; report</button>' +
     "</div>";
 
@@ -220,14 +227,14 @@ function renderRows() {
     bindCopy();
     return;
   }
-  if (!missing.length) {
+  if (!stillMissing && !rows.some((r) => r.justDone)) {
     body.innerHTML = zh(html) + zh('<div style="color:#3ecf8e;padding:20px 0;text-align:center">✓ Everything is already present</div>');
     bindCopy();
     return;
   }
   // 只有「确实缺、而且真的没找到地址」才提示失败。
   // 已完成的行本来就没有 url，不该算进「无地址」——之前就是这么误报的。
-  const needUrl = missing.filter((r) => r.state !== "complete" && !r.url && !r.job);
+  const needUrl = missing.filter((r) => !r.justDone && r.state !== "complete" && !r.url && !r.job);
   if (needUrl.length && !statusMsg) {
     html += '<div style="color:#f0c060;padding:8px 0 12px;font-size:12px;line-height:1.6">These files were not found on the mirror. They may be private repos, or renamed after the fact.<br>Click “Copy &amp; report” in the top right: it copies the diagnostics and opens the issue page.</div>';
   }
@@ -243,7 +250,9 @@ function renderRows() {
     let color = "#4a7dff";
     let pct = 0;
 
-    if (r.state === "complete" && !job) {
+    if (r.justDone) {
+      right = '<span style="font-size:11px;color:#3ecf8e;flex-shrink:0">' + zh("done") + "</span>";
+    } else if (r.state === "complete" && !job) {
       right = '<span style="font-size:11px;color:#3ecf8e;flex-shrink:0">✓ present</span>';
     } else if (cat === "downloading" || cat === "queued") {
       right = '<div style="display:flex;gap:4px;flex-shrink:0">' + btn("mf-pause", "Pause", "#3a3a52") + btn("mf-cancel", zh("Cancel"), "#4a2530") + "</div>";
@@ -257,6 +266,11 @@ function renderRows() {
       right = btn("mf-dl", zh("Retry"), "#4a7dff");
     } else if (cat === "cancelled") {
       right = btn("mf-dl", "Redownload", "#4a7dff");
+    } else if (cat === "idle-partial") {
+      color = "#f0c060";
+      right = r.url
+        ? btn("mf-dl", zh("Resume"), "#4a7dff")
+        : '<button disabled style="background:#2e2e42;border:0;color:#666680;border-radius:6px;padding:5px 12px">No URL</button>';
     } else {
       right = r.url
         ? btn("mf-dl", "Download", "#4a7dff")
@@ -272,10 +286,13 @@ function renderRows() {
               (r.size ? " · " + mb(r.size) : "") + (r.repo ? " · " + escapeHtml(r.repo) : "") + "</div>" +
           "</div>" + '<div style="flex-shrink:0">' + right + "</div>" +
         "</div>" +
-        '<div style="height:5px;background:#22222f;border-radius:3px;overflow:hidden;margin:6px 0 3px">' +
-          '<i data-bar="' + escapeAttr(r.name) + '" style="display:block;height:100%;background:' + color + ';width:' + pct + '%"></i>' +
-        "</div>" +
-        '<div data-num="' + escapeAttr(r.name) + '" style="font-size:11px;color:#7a7a92"></div>' +
+        (r.justDone
+          ? '<div style="height:5px;background:#3ecf8e;border-radius:3px;overflow:hidden;margin:6px 0 3px"></div>' +
+            '<div style="font-size:11px;color:#3ecf8e">100% · ' + mb(r.have || 0) + '</div>'
+          : '<div style="height:5px;background:#22222f;border-radius:3px;overflow:hidden;margin:6px 0 3px">' +
+              '<i data-bar="' + escapeAttr(r.name) + '" style="display:block;height:100%;background:' + color + ';width:' + pct + '%"></i>' +
+            "</div>" +
+            '<div data-num="' + escapeAttr(r.name) + '" style="font-size:11px;color:#7a7a92"></div>') +
       "</div>";
   }
 
@@ -342,11 +359,11 @@ function updateNumbers() {
     } else if (cat === "cancelled") {
       numEl.style.color = "#8a8aa0";
       numEl.textContent = zh("Cancelled");
-    } else if (cat === zh("done")) {
+    } else if (cat === "done" || cat === zh("done")) {
       barEl.style.width = "100%";
       barEl.style.background = "#3ecf8e";
       numEl.style.color = "#3ecf8e";
-      numEl.textContent = "✓ done";
+      numEl.textContent = zh("done") + " 100% · " + mb(r.have || 0);
     } else {
       barEl.style.width = "0%";
       numEl.style.color = "#7a7a92";
@@ -620,6 +637,20 @@ async function pollJobs() {
     for (const nm of Array.from(pending)) {
       if (jobsBy[nm]) pending.delete(nm);
     }
+
+    // 任务完成 → 把这一行标成已完成，让它从「缺」里退出去，并在状态栏报一句。
+    // 之前不这么做，行会一直挂着，只有手动「重新扫描」才消失。
+    let finished = "";
+    for (const r of rows) {
+      const j = jobFor(r.name);
+      if (j && j.state === "done" && !r.justDone) {
+        r.state = "complete";
+        r.justDone = true;
+        r.have = j.total || j.done || r.have || 0;
+        finished = baseName(j.name || r.name);
+      }
+    }
+    if (finished) statusMsg = "Download complete: " + finished;
   } catch (e) {
     return;
   }
@@ -743,6 +774,7 @@ const ZH = {
   "Submit failed: ": "提交失败：",
   "Pause all failed": "全部暂停失败",
   "Copy failed": "复制失败",
+  "Download complete: ": "已下载完成：",
   "Download missing models through a mirror (resumable)": "缺的模型从镜像下载（断点续传）",
   "Rescan": "重新扫描",
   "Download all (": "全部下载（",
@@ -765,7 +797,7 @@ const ZH = {
   "Cancelled": "已取消",
   "Failed: ": "失败：",
   "Copied. Opening the issue page...": "已复制，正在打开反馈页…",
-  "done": "已完成",
+  "done": "✓ 已完成",
   "Referenced ": "引用 ",
   " · with URL ": " · 带地址 ",
   " · missing ": " · 缺 ",
