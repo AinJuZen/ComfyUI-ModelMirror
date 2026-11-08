@@ -29,7 +29,7 @@ except Exception as e:  # 不在 ComfyUI 里时应静默失败，不拖垮启动
     print(f"[mirror-fetch] 无法加载 ComfyUI 依赖: {e}")
     PromptServer = None
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 MIRROR = os.environ.get("HF_MIRROR", "https://hf-mirror.com")
 UA = {"User-Agent": "comfyui-mirror-fetch/" + VERSION}
 

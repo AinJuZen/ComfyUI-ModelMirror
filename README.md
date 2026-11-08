@@ -267,3 +267,49 @@ curl http://127.0.0.1:8188/system_stats
 ## License
 
 MIT — 见 [LICENSE](LICENSE)。
+
+---
+
+## 安全说明（2026-11 更新）
+
+**v0.2.0 之前的版本存在一个目录穿越漏洞，已修复。**
+
+第一版把请求里的 `directory` 直接拼到 models 后面，只 trim 了两头的斜杠。
+构造一个 `directory` 为 `../../custom_nodes` 的请求，就能把文件写到插件目录里去。
+
+**这个问题是在 ComfyUI-Manager 的收录审核里被指出的**（[PR #3477](https://github.com/Comfy-Org/ComfyUI-Manager/pull/3477)）。感谢审核。
+
+**现在的做法是两道闸：**
+
+```
+① 白名单
+   directory 只认标准模型目录名：
+   checkpoints / diffusion_models / text_encoders / vae / loras /
+   controlnet / clip_vision / upscale_models / embeddings …
+   绝对路径、盘符、~、任何路径分隔符、.. 一律拒绝，返回 400，不建目录
+
+② 复核
+   拼完之后用 realpath + commonpath 再确认一次，解析结果必须仍在 models 根目录下
+```
+
+**另外：**
+
+- 目录只在写入时才创建（`create=True`），读路径没有副作用
+- `/mirror_fetch/check` 只返回相对路径，不再泄露本机绝对路径
+- 文件名只取 basename，`.` 和 `..` 拒绝
+
+**回归测试 15 项：合法目录 6 项通过，7 种穿越写法 + 2 种坏文件名全部拒绝。**
+
+**如果你在用 v0.1.x，请升级：**
+
+```bash
+comfy node install comfyui-modelmirror
+```
+
+---
+
+## 界面语言
+
+**代码和界面以英文为基准。**
+
+**浏览器语言是中文时，面板会自动切回中文**（英文是源码语言，中文是渲染后的覆盖层）。

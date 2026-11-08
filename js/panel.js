@@ -692,3 +692,106 @@ try {
 } catch (e) {
   log("MutationObserver is not available", e);
 }
+
+// ---------------------------------------------------------------- 中文本地化
+// The source language is English (required for the registry listing).
+// When the browser language is Chinese we overlay a translation on the
+// rendered DOM, so the code stays English-only and the user still sees Chinese.
+const ZH_MODE = /^zh/i.test(navigator.language || "");
+
+const ZH_MAP = {
+  "Mirror Fetch": "镜像补缺",
+  "Rescan": "重新扫描",
+  "Download": "下载",
+  "Download all": "全部下载",
+  "Pause": "暂停",
+  "Pause all": "全部暂停",
+  "Resume": "继续",
+  "Retry": "重试",
+  "Cancel": "取消",
+  "Redownload": "重新下载",
+  "No URL": "无地址",
+  "Copy & report": "复制并报告",
+  "Not downloaded": "未下载",
+  "Present": "已存在",
+  "Done": "已完成",
+  "Failed": "失败",
+  "Cancelled": "已取消",
+  "Paused": "已暂停",
+  "Preparing...": "准备中…",
+  "Submitting...": "提交中…",
+  "Pausing...": "暂停中…",
+  "Scanning...": "正在扫描…",
+  "Copied. Opening the issue page...": "已复制，正在打开反馈页…",
+  "No model references found in the current workflow": "当前工作流没检测到模型引用",
+  "Click “Rescan” in the top right to see what is missing": "点右上「重新扫描」查看缺什么",
+  "✓ Everything is already present": "✓ 全部已存在，不缺东西",
+  "Missing Models": "缺失模型",
+  "Not started": "未开始",
+};
+
+const ZH_PREFIX = [
+  ["Download all (", "全部下载（"],
+  ["Pause all (", "全部暂停（"],
+  ["Referenced ", "引用 "],
+  [" · with URL ", " 个 · 带地址 "],
+  [" · missing ", " 个 · 缺 "],
+  ["Paused · ", "已暂停 · "],
+  [" · resumed", " · 续传"],
+  ["got ", "已下 "],
+  ["left ", "剩 "],
+  [" s", " 秒"],
+  ["Failed: ", "失败："],
+  ["Check failed: ", "检查失败："],
+  ["Request failed: ", "请求失败："],
+  ["Submit failed: ", "提交失败："],
+  ["Pause all failed", "全部暂停失败"],
+];
+
+function zhText(s) {
+  const t = s.trim();
+  if (!t) return s;
+  if (ZH_MAP[t]) return s.replace(t, ZH_MAP[t]);
+  for (const [en, zh] of ZH_PREFIX) {
+    if (t.startsWith(en)) return s.replace(en, zh);
+  }
+  return s;
+}
+
+function applyZh(root) {
+  if (!ZH_MODE || !root) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  const nodes = [];
+  let n;
+  while ((n = walker.nextNode())) nodes.push(n);
+  for (const node of nodes) {
+    const v = node.nodeValue;
+    if (!v || !v.trim()) continue;
+    const next = zhText(v);
+    if (next !== v) node.nodeValue = next;
+  }
+  root.querySelectorAll("[title]").forEach((el) => {
+    const t = el.getAttribute("title");
+    const nt = zhText(t);
+    if (nt !== t) el.setAttribute("title", nt);
+  });
+}
+// 面板每次重建/刷新后过一遍翻译。用 MutationObserver 而不是改 60 处调用点。
+let zhTimer = null;
+function watchZh() {
+  if (!ZH_MODE) return;
+  const obs = new MutationObserver(() => {
+    clearTimeout(zhTimer);
+    zhTimer = setTimeout(() => {
+      const box = document.getElementById("mirror-fetch-panel");
+      applyZh(box || document.body);
+    }, 40);
+  });
+  obs.observe(document.body, { childList: true, subtree: true, characterData: true });
+}
+
+try {
+  watchZh();
+} catch (e) {
+  /* 观察器起不来也不影响功能 */
+}
