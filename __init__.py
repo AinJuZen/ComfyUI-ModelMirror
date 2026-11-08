@@ -29,7 +29,7 @@ except Exception as e:  # 不在 ComfyUI 里时应静默失败，不拖垮启动
     print(f"[mirror-fetch] 无法加载 ComfyUI 依赖: {e}")
     PromptServer = None
 
-VERSION = "0.2.6"
+VERSION = "0.2.7"
 MIRROR = os.environ.get("HF_MIRROR", "https://hf-mirror.com")
 UA = {"User-Agent": "comfyui-mirror-fetch/" + VERSION}
 
@@ -184,6 +184,40 @@ def to_mirror(url):
 
 # ------------------------------------------------------------------ 下载线程
 
+def friendly_error(e):
+    """把底层异常翻成人话。
+
+    原始文案（URLError: <urlopen error [SSL: UNEXPECTED_EOF...>）对用户没有意义，
+    而且会让人以为插件坏了——实际多半是网络中途断了。
+    """
+    name = type(e).__name__
+    msg = str(e)
+    low = msg.lower()
+
+    if ("unexpected_eof" in low or "eof occurred" in low or "connection reset" in low
+            or "reset by peer" in low or "forcibly closed" in low or "10054" in low
+            or "10053" in low or "aborted" in low):
+        return "连接被中途断开（网络不稳），已下载的部分保留着，点「重试」接着下"
+    if "timed out" in low or "timeout" in low:
+        return "连接超时。可以点「重试」，或先下载别的文件"
+    if "ssl" in low or "certificate" in low:
+        return "TLS 握手失败（网络被干扰或代理没开），换个时间重试"
+    if "403" in low or "forbidden" in low:
+        return "镜像拒绝了这个文件（可能需要登录或已下架）"
+    if "404" in low or "not found" in low:
+        return "镜像上没有这个文件（文件名可能被改过）"
+    if "no space" in low or "errno 28" in low:
+        return "磁盘空间不够"
+    if "permission" in low or "access is denied" in low:
+        return "没有写入权限，检查 models 目录的权限"
+    if "下载不完整" in msg:
+        return msg          # 这条本来就是我们自己写的中文
+    if "已取消" in msg:
+        return msg
+    # 兜底：保留类型名和短消息，别甩整段堆栈
+    return f"{name}: {msg[:120]}"
+
+
 def run_download(job_id, url, name, directory):
     job = JOBS[job_id]
 
@@ -266,7 +300,7 @@ def _do_download(job, job_id, url, name, directory):
                 job.update(state="cancelled", speed=0, eta=0)
         else:
             with JOBS_LOCK:
-                job.update(state="error", error=f"{type(e).__name__}: {e}", speed=0)
+                job.update(state="error", error=friendly_error(e), speed=0)
 
 
 # ------------------------------------------------------------------ 路由

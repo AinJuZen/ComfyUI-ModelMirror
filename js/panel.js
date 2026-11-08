@@ -207,7 +207,7 @@ function renderRows() {
 
   let html =
     '<div style="display:flex;align-items:center;gap:8px;padding:2px 0 9px;border-bottom:1px solid #22222f;margin-bottom:8px;font-size:11px;color:#8a8aa0">' +
-      '<span style="flex:1">Referenced ' + rows.length + " · with URL " + withUrl + " · missing " + missing.length + "</span>" +
+      '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Referenced ' + rows.length + " · with URL " + withUrl + " · missing " + missing.length + "</span>" +
       '<button id="mf-copy" style="background:#2e2e42;border:0;color:#cfd8ff;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:11px">Copy &amp; report</button>' +
     "</div>";
 
@@ -216,12 +216,12 @@ function renderRows() {
   }
 
   if (!rows.length) {
-    body.innerHTML = zh(html) + '<div style="color:#8a8aa0;padding:20px 0;text-align:center">Click “Rescan” in the top right to see what is missing</div>';
+    body.innerHTML = zh(html) + zh('<div style="color:#8a8aa0;padding:20px 0;text-align:center">Click “Rescan” in the top right to see what is missing</div>');
     bindCopy();
     return;
   }
   if (!missing.length) {
-    body.innerHTML = zh(html) + '<div style="color:#3ecf8e;padding:20px 0;text-align:center">✓ Everything is already present</div>';
+    body.innerHTML = zh(html) + zh('<div style="color:#3ecf8e;padding:20px 0;text-align:center">✓ Everything is already present</div>');
     bindCopy();
     return;
   }
@@ -267,7 +267,7 @@ function renderRows() {
             '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(r.name) + "</div>" +
             '<div style="font-size:11px;color:#7a7a92;margin-top:2px">' + escapeHtml(r.directory || "?") +
               (r.size ? " · " + mb(r.size) : "") + (r.repo ? " · " + escapeHtml(r.repo) : "") + "</div>" +
-          "</div>" + right +
+          "</div>" + '<div style="flex-shrink:0">' + right + "</div>" +
         "</div>" +
         '<div style="height:5px;background:#22222f;border-radius:3px;overflow:hidden;margin:6px 0 3px">' +
           '<i data-bar="' + escapeAttr(r.name) + '" style="display:block;height:100%;background:' + color + ';width:' + pct + '%"></i>' +
@@ -318,7 +318,7 @@ function updateNumbers() {
       barEl.style.width = pct.toFixed(1) + "%";
       barEl.style.background = "#4a7dff";
       const sp = job.speed ? (job.speed / 1048576).toFixed(1) + " MB/s" : "…";
-        const eta = job.eta ? zh("left ") + Math.round(job.eta) + zh(" s") : "";
+        const eta = job.eta ? zh("left ") + Math.round(job.eta) + (ZH_MODE ? " 秒" : " s") : "";
       numEl.style.color = "#4a7dff";
       numEl.textContent = pct.toFixed(0) + "% · " + mb(job.done) + " / " + mb(job.total) +
           " · " + sp + " · " + eta + (job.resumed ? zh(" · resumed") : "");
@@ -725,11 +725,10 @@ const ZH = {
   "Copied. Opening the issue page...": "已复制，正在打开反馈页…",
   "done": "已完成",
   "Referenced ": "引用 ",
-  " · with URL ": " 个 · 带地址 ",
-  " · missing ": " 个 · 缺 ",
+  " · with URL ": " · 带地址 ",
+  " · missing ": " · 缺 ",
   "got ": "已下 ",
   "left ": "剩 ",
-  " s": " 秒",
   " · resumed": " · 续传",
   "Missing Models": "缺失模型",
   "No model references found in the current workflow": "当前工作流没检测到模型引用",
@@ -749,11 +748,19 @@ function zh(s) { return T(s); }
 
 function T(s) {
   if (!ZH_MODE || !s) return s;
-  let out = s;
-  for (const k of ZH_KEYS) {
-    if (out.indexOf(k) >= 0) out = out.split(k).join(ZH[k]);
+  const apply = (txt) => {
+    let out = txt;
+    for (const k of ZH_KEYS) {
+      if (out.indexOf(k) >= 0) out = out.split(k).join(ZH[k]);
+    }
+    return out;
+  };
+  // 含标签的串：只在 < > 之间翻，属性（style= / class= / id=）一个字都不能动。
+  // 之前就是因为 " s" 这条键把 style= 改成了 秒tyle=，整个面板样式全废、布局重叠。
+  if (s.indexOf("<") >= 0) {
+    return s.split(/(<[^>]*>)/).map((part, i) => (i % 2 === 1 ? part : apply(part))).join("");
   }
-  return out;
+  return apply(s);
 }
 
 // 只跑一次：骨架是整段 innerHTML，字符串里塞不下逐个标点。
