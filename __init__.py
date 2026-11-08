@@ -29,7 +29,7 @@ except Exception as e:  # 不在 ComfyUI 里时应静默失败，不拖垮启动
     print(f"[mirror-fetch] 无法加载 ComfyUI 依赖: {e}")
     PromptServer = None
 
-VERSION = "0.2.7"
+VERSION = "0.2.8"
 MIRROR = os.environ.get("HF_MIRROR", "https://hf-mirror.com")
 UA = {"User-Agent": "comfyui-mirror-fetch/" + VERSION}
 
@@ -329,15 +329,87 @@ def _fix_dir(path, directory):
 _CACHE = {}
 
 
+# ------------------------------------------------------------------ 解析缓存
+# 内存缓存只在进程活着时有效——重启一次就全丢，用户每次都吃 10-40 秒。
+# 落一份到 models 旁边，7 天有效；命中的话解析瞬间返回。
+_CACHE_TTL = 7 * 24 * 3600
+_disk_cache = None
+_disk_lock = threading.Lock()
+
+
+def _cache_path():
+    r"""缓存放在 ComfyUI 的 user\ 下，不依赖 models 根是否存在。
+
+    之前用 models_root() 兜底分支会落到 custom_nodes\models\，
+    在没有 folder_paths 的环境里就会在插件目录里造一个假的 models 目录。
+    """
+    # __file__ 是 custom_nodes/<插件>/__init__.py，往上三级才是 ComfyUI 根
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    for sub in ("user", ""):
+        try:
+            d = os.path.join(root, sub) if sub else root
+            os.makedirs(d, exist_ok=True)
+            probe = os.path.join(d, ".mirror_fetch_cache_probe")
+            with open(probe, "w") as f:
+                f.write("1")
+            os.remove(probe)
+            return os.path.join(d, "mirror_fetch_resolve_cache.json")
+        except Exception:
+            continue
+    return ""
+
+
+def _load_disk_cache():
+    global _disk_cache
+    if _disk_cache is not None:
+        return _disk_cache
+    _disk_cache = {}
+    p = _cache_path()
+    if not p or not os.path.exists(p):
+        return _disk_cache
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        now = time.time()
+        for k, v in raw.items():
+            if isinstance(v, dict) and now - float(v.get("_ts") or 0) < _CACHE_TTL:
+                _disk_cache[k] = v
+    except Exception:
+        _disk_cache = {}
+    return _disk_cache
+
+
+def _save_disk_cache():
+    p = _cache_path()
+    if not p:
+        return
+    try:
+        with _disk_lock:
+            tmp = p + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(_disk_cache or {}, f, ensure_ascii=False)
+            os.replace(tmp, p)
+    except Exception:
+        pass
+
+
+_SEARCH_MEMO = {}
+
+
 def _search_ids(kw):
     import urllib.parse as _up
+    if kw in _SEARCH_MEMO:
+        return _SEARCH_MEMO[kw]
     try:
         d = mirror_get_json(f"{MIRROR}/api/models?search={_up.quote(kw)}&limit=40&full=false")
     except Exception:
         return []
     if not isinstance(d, list):
+        _SEARCH_MEMO[kw] = []
         return []
-    return [c.get("id") or c.get("modelId") for c in d if (c.get("id") or c.get("modelId"))]
+    ids = [c.get("id") or c.get("modelId") for c in d if (c.get("id") or c.get("modelId"))]
+    _SEARCH_MEMO[kw] = ids
+    return ids
 
 
 def _repo_hit(repo, stem):
@@ -488,17 +560,29 @@ if True:
 
         def work(n):
             cached = _CACHE.get(n)
+            if cached is None:
+                dc = _load_disk_cache().get(n)
+                if dc and dc.get("url"):
+                    _CACHE[n] = {k: v for k, v in dc.items() if k != "_ts"}
+                    cached = _CACHE[n]
             if cached is not None:
                 return n, cached
             r = resolve_by_filename(n)
             if r:
                 r["directory"] = _fix_dir(r.get("path", ""), r.get("directory"))
             _CACHE[n] = r
+            try:
+                r2 = dict(r)
+                r2["_ts"] = time.time()
+                _load_disk_cache()[n] = r2
+            except Exception:
+                pass
             return n, r
 
         # 并行 + 缓存：第一次约几秒，之后瞬时
         results = await asyncio.gather(*[loop.run_in_executor(None, work, n) for n in names])
         found = {n: r for n, r in results if r}
+        _save_disk_cache()
         return web.json_response({"found": found, "cached": len(found) - 0})
 
     @routes.post("/mirror_fetch/pause")

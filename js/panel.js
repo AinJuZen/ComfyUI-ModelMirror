@@ -1,4 +1,4 @@
-// ComfyUI Mirror Fetch - frontend panel
+﻿// ComfyUI Mirror Fetch - frontend panel
 // Fills in missing models from a configurable mirror, with resume and live progress.
 // It does not patch any official file.
 
@@ -225,7 +225,10 @@ function renderRows() {
     bindCopy();
     return;
   }
-  if (!withUrl && !statusMsg) {
+  // 只有「确实缺、而且真的没找到地址」才提示失败。
+  // 已完成的行本来就没有 url，不该算进「无地址」——之前就是这么误报的。
+  const needUrl = missing.filter((r) => r.state !== "complete" && !r.url && !r.job);
+  if (needUrl.length && !statusMsg) {
     html += '<div style="color:#f0c060;padding:8px 0 12px;font-size:12px;line-height:1.6">These files were not found on the mirror. They may be private repos, or renamed after the fact.<br>Click “Copy &amp; report” in the top right: it copies the diagnostics and opens the issue page.</div>';
   }
 
@@ -357,11 +360,24 @@ function bindCopy() {
   const btn = panel.querySelector("#mf-copy");
   if (!btn) return;
   btn.onclick = async () => {
-    const txt = JSON.stringify(rows, null, 2);
+    // 只发「需要地址却没拿到」的行。已完成的行不需要地址，
+    // 把它们塞进 issue 只会让维护者以为全是失败。
+    const needUrlRows = rows.filter((r) => r.state !== "complete" && !r.url);
+    const report = {
+      version: window.__mirrorFetchVersion || "",
+      mirror: (document.querySelector("#mf-mirror") || {}).textContent || "",
+      language: navigator.language,
+      missing_need_url: needUrlRows.map((r) => ({
+        name: r.name, directory: r.directory, state: r.state, have: r.have,
+      })),
+      already_complete: rows.filter((r) => r.state === "complete").length,
+      note: "Rows under already_complete need no URL; they are only counted, not listed.",
+    };
+    const txt = JSON.stringify(report, null, 2);
     try {
       await navigator.clipboard.writeText(txt);
       btn.textContent = zh("Copied. Opening the issue page...");
-      const title = encodeURIComponent("[unresolved] " + rows.filter(r => !r.url).map(r => r.name).join(", ").slice(0, 120));
+      const title = encodeURIComponent("[unresolved] " + needUrlRows.map(r => r.name).join(", ").slice(0, 120));
       const body = encodeURIComponent("Please paste the diagnostics from your clipboard here (Ctrl+V).\n\n---\n\n");
       window.open("https://github.com/AinJuZen/ComfyUI-ModelMirror/issues/new?title=" + title + "&body=" + body, "_blank");
     } catch (e) {
@@ -417,19 +433,34 @@ async function scan() {
     statusMsg = "Looking up download URLs on the mirror... the first run is slow (10-40s), then it is cached";
     renderRows();
     try {
-      const rv = await fetch(API + "/resolve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ names: need }),
-      }).then((r) => r.json());
-      const found = rv.found || {};
-      for (const r of rows) {
-        const f = found[r.name];
-        if (f) {
-          r.url = f.url;
-          r.size = f.size || 0;
-          r.repo = f.repo || "";
-          if (f.directory && !r.dirKnown) r.directory = f.directory;
+      // 逐个解析、逐个显示：第一个出来就能点下载，不用等最慢的那个。
+      const found = {};
+      for (let i = 0; i < need.length; i++) {
+        if (i > 0) {
+          statusMsg = "Looking up download URLs on the mirror... (" + i + "/" + need.length + ")";
+          renderRows();
+        }
+        try {
+          const rv = await fetch(API + "/resolve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ names: [need[i]] }),
+          }).then((r) => r.json());
+          const one = (rv.found || {})[need[i]];
+          if (one) {
+            found[need[i]] = one;
+            const row = rows.find((r) => r.name === need[i]);
+            if (row) {
+              row.url = one.url;
+              row.size = one.size || 0;
+              row.repo = one.repo || "";
+              if (one.directory && !row.dirKnown) row.directory = one.directory;
+              statusMsg = "Looking up download URLs on the mirror... (" + (i + 1) + "/" + need.length + ")";
+              renderRows();          // 拿到一个就刷一次
+            }
+          }
+        } catch (e) {
+          /* 单个失败不影响其它文件 */
         }
       }
       // The folder was corrected - re-check existence, otherwise present files are reported missing.
@@ -702,6 +733,17 @@ const ZH_MODE = /^zh/i.test(navigator.language || "");
 
 const ZH = {
   "Mirror Fetch": "镜像补缺",
+  "Looking up download URLs on the mirror... the first run is slow (10-40s), then it is cached":
+    "正在镜像上查找下载地址…首次较慢（10-40 秒），之后有缓存",
+  "Scanning...": "正在扫描…",
+  "Pausing...": "暂停中…",
+  "Submitting...": "提交中…",
+  "Check failed: ": "检查失败：",
+  "Request failed: ": "请求失败：",
+  "Submit failed: ": "提交失败：",
+  "Pause all failed": "全部暂停失败",
+  "Copy failed": "复制失败",
+  "Download missing models through a mirror (resumable)": "缺的模型从镜像下载（断点续传）",
   "Rescan": "重新扫描",
   "Download all (": "全部下载（",
   "Download all": "全部下载",
