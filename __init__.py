@@ -29,7 +29,7 @@ except Exception as e:  # 不在 ComfyUI 里时应静默失败，不拖垮启动
     print(f"[mirror-fetch] 无法加载 ComfyUI 依赖: {e}")
     PromptServer = None
 
-VERSION = "0.2.1"
+VERSION = "0.2.2"
 MIRROR = os.environ.get("HF_MIRROR", "https://hf-mirror.com")
 UA = {"User-Agent": "comfyui-mirror-fetch/" + VERSION}
 
@@ -135,6 +135,20 @@ def safe_file_name(name):
     return base
 
 
+def assert_inside_models(path):
+    """确认 path 解析后仍在 models 根目录下。
+
+    防的是 .part 被做成符号链接：下载时用 "ab"/"wb" 打开，会顺着链接
+    写到 models 之外去（截断或追加别人的文件）。
+    os.link 的安全边界必须在这里再查一次，而不是只查目录名。
+    """
+    root = os.path.realpath(models_root())
+    real = os.path.realpath(path)
+    if real == root or real.startswith(root + os.sep):
+        return
+    raise BadDir("refusing to write outside models/: " + os.path.basename(path))
+
+
 def find_existing(name, directory):
     """返回 (状态, 本地字节, 路径)。状态：complete / partial / missing"""
     name = (name or "").replace("\\", "/")
@@ -191,6 +205,10 @@ def _do_download(job, job_id, url, name, directory):
     dest = os.path.join(d, safe_file_name(name))
     tmp = dest + ".part"
     # 目录已在 target_dir(create=True) 里建好，这里不再 makedirs
+
+    # dest 与 .part 都不能指向 models 之外（.part 可能是别人做的符号链接）
+    assert_inside_models(dest)
+    assert_inside_models(tmp)
 
     start_from = os.path.getsize(tmp) if os.path.exists(tmp) else 0
     headers = dict(UA)
