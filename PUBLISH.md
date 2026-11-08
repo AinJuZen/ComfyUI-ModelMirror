@@ -3,33 +3,33 @@
 发布包已经准备好：
 
 ```
-E:\WorkSpace\_shared\assets\comfyui-mirror-fetch\
+E:\WorkSpace\_shared\assets\comfyui-mirror-downloader\
 ```
 
 ## 0. 先把 LICENSE 里的占位符改掉
 
 ```powershell
-notepad E:\WorkSpace\_shared\assets\comfyui-mirror-fetch\LICENSE
+notepad E:\WorkSpace\_shared\assets\comfyui-mirror-downloader\LICENSE
 ```
 
 把 `<YOUR NAME>` 换成你的名字或 ID。
 
 ## 1. 建仓库
 
-名字建议：`comfyui-mirror-fetch`（跟目录名一致，ComfyUI 用户一眼看懂）
+名字建议：`comfyui-mirror-downloader`（跟目录名一致，ComfyUI 用户一眼看懂）
 
 在 GitHub 上新建一个 **空** 仓库（不要勾 README / .gitignore / LICENSE，我们本地已有）。
 
 ## 2. 本地初始化并推送
 
 ```powershell
-cd E:\WorkSpace\_shared\assets\comfyui-mirror-fetch
+cd E:\WorkSpace\_shared\assets\comfyui-mirror-downloader
 
 git init
 git add .
 git commit -m "feat: 缺模型一键镜像补齐（暂停/续传/并发/完整性校验）"
 git branch -M main
-git remote add origin https://github.com/<你的用户名>/comfyui-mirror-fetch.git
+git remote add origin https://github.com/<你的用户名>/comfyui-mirror-downloader.git
 git push -u origin main
 ```
 
