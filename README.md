@@ -41,6 +41,18 @@ open an issue and I'll write them.
 
 **要求**：ComfyUI ≥ 0.3.x（含 Desktop 版）。纯标准库，无额外依赖。
 
+
+**四条渠道，现在哪条通：**
+
+| 渠道 | 状态 |
+|---|---|
+| **Comfy Registry**（一行命令） | ✅ **v0.2.9 已上架，Active** |
+| Manager 4.x | ✅ 它直接读 Registry，缓存刷新后搜得到 |
+| Manager 3.x（节点清单） | ⏳ 收录 PR 待合并 · [#3477](https://github.com/Comfy-Org/ComfyUI-Manager/pull/3477) |
+| 下载 ZIP | ✅ 永远可用 |
+
+**下面三种方式按你的习惯挑一个。第一条是推荐路径。**
+
 ### 方式 A · 一行命令（推荐）
 
 ```bash
