@@ -116,7 +116,17 @@ function collectModelRefs() {
       }
     }
   }
-  return out;
+
+  // 两条采集路径（workflow JSON / 节点 widget）用的去重键不一样：
+  //   deepFindModels 用 (directory + "|" + name)，widget 循环用 ("|" + value)
+  // 同一个文件因此会被收两遍。这里按文件名统一收一次，优先留有明确目录的那条。
+  const byName = new Map();
+  for (const r of out) {
+    const cur = byName.get(r.name);
+    if (!cur) byName.set(r.name, r);
+    else if (!cur.dirKnown && r.dirKnown) byName.set(r.name, r);
+  }
+  return Array.from(byName.values());
 }
 
 // ---------------------------------------------------------------- state
